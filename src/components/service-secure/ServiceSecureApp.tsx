@@ -1595,6 +1595,16 @@ function CallDetail({
           }}
         />
       )}
+      {showAcct && (
+        <AssignAccountModal
+          c={c}
+          onClose={() => setShowAcct(false)}
+          onSave={(name) => {
+            onAssignAccount(name);
+            setShowAcct(false);
+          }}
+        />
+      )}
     </div>
   );
 }
