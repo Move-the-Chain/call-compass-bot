@@ -293,6 +293,8 @@ function SummaryView({
   range,
   todosNeg,
   todosPos,
+  resolved,
+  followUps,
   onOpen,
 }: {
   total: number;
@@ -302,10 +304,15 @@ function SummaryView({
   range: string;
   todosNeg: Call[];
   todosPos: Call[];
+  resolved: Set<number>;
+  followUps: Record<number, FollowUp>;
   onOpen: (c: Call) => void;
 }) {
+  const [tab, setTab] = useState<"review" | "sentiment">("review");
+  const openReview = todosNeg.filter((c) => !resolved.has(c.id));
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Total calls" value={total} sub={range} />
         <Kpi label="Positive" value={`${Math.round((pos / total) * 100)}%`} sub={`${pos} calls`} tone="pos" />
@@ -313,75 +320,207 @@ function SummaryView({
         <Kpi label="Unmatched" value={unmatched} sub="need linking" tone="neu" />
       </div>
 
-      <div className="surface-card p-6">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Sentiment by Agent
-            </div>
-            <div className="font-display mt-1 text-xl">How the team sounded today</div>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border">
+        {[
+          { k: "review" as const, label: "To review", count: openReview.length, icon: AlertTriangle },
+          { k: "sentiment" as const, label: "Sentiment", count: undefined as number | undefined, icon: BarChart3 },
+        ].map(({ k, label, count, icon: Icon }) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={cn(
+              "-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13.5px] font-medium transition",
+              tab === k
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+            {count != null && count > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 font-mono text-[10.5px]",
+                  tab === k ? "bg-neg/15 text-neg" : "bg-surface-2 text-muted-foreground",
+                )}
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "review" && (
+        <ReviewFeed
+          todosNeg={todosNeg}
+          todosPos={todosPos}
+          resolved={resolved}
+          followUps={followUps}
+          onOpen={onOpen}
+        />
+      )}
+      {tab === "sentiment" && <SentimentTab />}
+    </div>
+  );
+}
+
+/* ---------------- Review feed tab ---------------- */
+function ReviewFeed({
+  todosNeg,
+  todosPos,
+  resolved,
+  followUps,
+  onOpen,
+}: {
+  todosNeg: Call[];
+  todosPos: Call[];
+  resolved: Set<number>;
+  followUps: Record<number, FollowUp>;
+  onOpen: (c: Call) => void;
+}) {
+  const [filter, setFilter] = useState<"open" | "resolved" | "positive">("open");
+  const openItems = todosNeg.filter((c) => !resolved.has(c.id));
+  const resolvedItems = todosNeg.filter((c) => resolved.has(c.id));
+  const list = filter === "open" ? openItems : filter === "resolved" ? resolvedItems : todosPos;
+
+  return (
+    <section>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">
+            {filter === "positive" ? "Positive standouts" : "Calls to review"}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {filter === "open" && "Sorted by account tier · highest priority first"}
+            {filter === "resolved" && "Already handled"}
+            {filter === "positive" && "Worth recognizing"}
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
+          {(
+            [
+              ["open", `Open · ${openItems.length}`],
+              ["resolved", `Resolved · ${resolvedItems.length}`],
+              ["positive", `Positive · ${todosPos.length}`],
+            ] as const
+          ).map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                filter === k
+                  ? "bg-surface-2 text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {list.map((c) => (
+          <Brief
+            key={c.id}
+            c={c}
+            onClick={() => onOpen(c)}
+            resolved={resolved.has(c.id)}
+            followUp={followUps[c.id]}
+          />
+        ))}
+        {!list.length && (
+          <div className="surface-card p-10 text-center text-sm text-muted-foreground">
+            {filter === "open" ? "All caught up. Nothing needs attention." : "Nothing here yet."}
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Sentiment tab ---------------- */
+function SentimentTab() {
+  const [mode, setMode] = useState<"agent" | "account">("agent");
+  const groups =
+    mode === "agent"
+      ? AGENTS.map((a) => ({
+          key: a.name,
+          title: a.name,
+          subtitle: a.role,
+          calls: CALLS.filter((c) => c.agent === a.name),
+        }))
+      : CLIENTS.map((cl) => ({
+          key: cl.name,
+          title: cl.name,
+          subtitle: `Tier ${cl.tier}`,
+          calls: CALLS.filter((c) => c.acct === cl.name),
+        }));
+
+  return (
+    <div className="surface-card p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Overall sentiment
+          </div>
+          <div className="font-display mt-1 text-xl">
+            {mode === "agent" ? "By employee" : "By company"}
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
+            {(
+              [
+                ["agent", "By employee"],
+                ["account", "By company"],
+              ] as const
+            ).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setMode(k)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                  mode === k ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-pos" />positive</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
           </div>
         </div>
-        <div className="space-y-3">
-          {AGENTS.map((a) => {
-            const cs = CALLS.filter((c) => c.agent === a.name);
-            if (!cs.length) return null;
-            const p = cs.filter((c) => c.sent > 0.1).length;
-            const n = cs.filter((c) => c.sent < -0.1).length;
-            const ne = cs.length - p - n;
-            return (
-              <div key={a.name} className="flex items-center gap-4">
-                <div className="w-44 text-[13px]">
-                  <div className="truncate font-medium">{a.name}</div>
-                  <div className="text-[11px] text-muted-foreground">{a.role}</div>
-                </div>
-                <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
-                  <div className="bg-pos transition-all" style={{ width: `${(p / cs.length) * 100}%` }} />
-                  <div className="bg-neu transition-all" style={{ width: `${(ne / cs.length) * 100}%` }} />
-                  <div className="bg-neg transition-all" style={{ width: `${(n / cs.length) * 100}%` }} />
-                </div>
-                <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">{cs.length}</div>
-              </div>
-            );
-          })}
-        </div>
       </div>
-
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-display text-2xl">To review</h2>
-            <p className="text-sm text-muted-foreground">Sorted by account tier · highest priority first</p>
-          </div>
-          <Chip tone="neg">
-            <AlertTriangle className="h-3 w-3" /> {todosNeg.length} need attention
-          </Chip>
-        </div>
-        <div className="grid gap-3">
-          {todosNeg.map((c) => (
-            <Brief key={c.id} c={c} onClick={() => onOpen(c)} />
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-display text-2xl text-pos">Positive standouts</h2>
-            <p className="text-sm text-muted-foreground">Worth recognizing</p>
-          </div>
-        </div>
-        <div className="grid gap-3">
-          {todosPos.map((c) => (
-            <Brief key={c.id} c={c} onClick={() => onOpen(c)} />
-          ))}
-        </div>
-      </section>
+      <div className="space-y-3">
+        {groups.map((g) => {
+          if (!g.calls.length) return null;
+          const p = g.calls.filter((c) => c.sent > 0.1).length;
+          const n = g.calls.filter((c) => c.sent < -0.1).length;
+          const ne = g.calls.length - p - n;
+          return (
+            <div key={g.key} className="flex items-center gap-4">
+              <div className="w-44 text-[13px]">
+                <div className="truncate font-medium">{g.title}</div>
+                <div className="text-[11px] text-muted-foreground">{g.subtitle}</div>
+              </div>
+              <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
+                <div className="bg-pos transition-all" style={{ width: `${(p / g.calls.length) * 100}%` }} />
+                <div className="bg-neu transition-all" style={{ width: `${(ne / g.calls.length) * 100}%` }} />
+                <div className="bg-neg transition-all" style={{ width: `${(n / g.calls.length) * 100}%` }} />
+              </div>
+              <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {g.calls.length}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
