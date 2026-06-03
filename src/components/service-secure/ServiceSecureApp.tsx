@@ -85,9 +85,9 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "notifications", label: "Notifications", icon: Bell },
 ];
 
-export type Role = "admin" | "coo" | "manager" | "agent";
-export const ROLES: Role[] = ["admin", "coo", "manager", "agent"];
-export const ROLE_LABEL: Record<Role, string> = { admin: "Admin", coo: "COO", manager: "Manager", agent: "Agent" };
+export type Role = "coo" | "manager" | "agent" | "contact" | "other";
+export const ROLES: Role[] = ["coo", "manager", "agent", "contact", "other"];
+export const ROLE_LABEL: Record<Role, string> = { coo: "COO", manager: "Manager", agent: "Agent", contact: "Contact", other: "Other" };
 export type Person = { id: string; name: string; email: string; phone: string; role: Role };
 export type Priority = "Low" | "Medium" | "High" | "Urgent";
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
