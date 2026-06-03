@@ -1399,12 +1399,20 @@ function CallDetail({
               ? `${c.caller}${c.passenger && c.passenger !== "Self" && c.passenger !== "N/A (billing call)" ? ` · booking for ${c.passenger}` : ""}`
               : "Caller not identified"}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Chip tone={sl.tone}>{sl.txt}</Chip>
             <Chip>{c.topic}</Chip>
             <Chip tone={c.match === "phone" ? "pos" : c.match === "name" ? "neu" : "neg"}>
               {c.match === "phone" ? "Matched by number" : c.match === "name" ? "Matched by name (confirm)" : "Unmatched"}
             </Chip>
+            {!c.acct && (
+              <button
+                onClick={() => setShowAcct(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-medium text-primary transition hover:bg-primary/15"
+              >
+                <UserPlus className="h-3 w-3" /> Assign account
+              </button>
+            )}
           </div>
         </div>
         <div className="text-right font-mono text-xs text-muted-foreground">
