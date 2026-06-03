@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import {
   AGENTS,
-  CALLS,
   CLIENTS,
   type Call,
   type Client,
@@ -30,7 +29,6 @@ import {
   filterCalls,
   fmtTime,
   mmss,
-  rangeBounds,
   sentLabel,
 } from "@/lib/service-secure-data";
 import { cn } from "@/lib/utils";
@@ -821,7 +819,7 @@ function ExplorerView({
         {!filtered.length && <div className="p-8 text-center text-sm text-muted-foreground">No calls match.</div>}
       </div>
       <div className="mt-3 text-xs text-muted-foreground">
-        {filtered.length} of {CALLS.length} calls
+        {filtered.length} calls in view
       </div>
     </div>
   );
