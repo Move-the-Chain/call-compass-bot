@@ -446,8 +446,6 @@ export default function ServiceSecureApp() {
         {screen === "notifications" && (
           <NotificationsView
             people={people}
-            rules={rules}
-            setRules={setRules}
             channels={channels}
             setChannels={setChannels}
             onGoAdmin={() => setScreen("admin")}
