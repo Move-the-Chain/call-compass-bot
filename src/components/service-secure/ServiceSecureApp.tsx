@@ -844,23 +844,44 @@ function Sel({ v, set, opts, label }: { v: string; set: (v: string) => void; opt
 }
 
 /* ---------------- Agents ---------------- */
-function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: string }) {
+function AgentsView({
+  rangeCalls,
+  range,
+  customStart,
+  customEnd,
+  onOpen,
+}: {
+  rangeCalls: Call[];
+  range: string;
+  customStart: string;
+  customEnd: string;
+  onOpen: (name: string) => void;
+}) {
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"all" | "neg" | "pos">("all");
+  const [sort, setSort] = useState<"all" | "neg" | "pos" | "vol">("all");
   const list = AGENTS.filter((a) => {
     if (q && !`${a.name} ${a.role} ${a.ext}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   }).map((a) => {
-    const cs = CALLS.filter((c) => c.agent === a.name);
+    const cs = rangeCalls.filter((c) => c.agent === a.name);
     const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-    return { a, cs, avg };
+    const buckets = dailyBuckets(cs, range, customStart, customEnd);
+    return { a, cs, avg, buckets };
   });
   const sorted =
     sort === "neg"
       ? [...list].sort((x, y) => x.avg - y.avg)
       : sort === "pos"
       ? [...list].sort((x, y) => y.avg - x.avg)
+      : sort === "vol"
+      ? [...list].sort((x, y) => y.cs.length - x.cs.length)
       : list;
+
+  const heatmapDays = dailyBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
+  const heatmapRows = list.map((row) => ({
+    name: row.a.name,
+    counts: row.buckets.map((b) => b.count),
+  }));
 
   return (
     <div className="space-y-5">
@@ -889,14 +910,27 @@ function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: 
             className="h-9 rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
           >
             <option value="all">Sort: A–Z</option>
+            <option value="vol">Most calls first</option>
             <option value="neg">Most negative first</option>
             <option value="pos">Most positive first</option>
           </select>
         </div>
       </div>
 
+      {heatmapDays.length > 1 && (
+        <div className="surface-card p-6">
+          <div className="mb-4">
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Activity heatmap
+            </div>
+            <div className="font-display mt-1 text-xl">Calls per agent · per day</div>
+          </div>
+          <AgentDayHeatmap rows={heatmapRows} days={heatmapDays} />
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sorted.map(({ a, cs, avg }) => {
+        {sorted.map(({ a, cs, avg, buckets }) => {
           const sl = sentLabel(avg);
           return (
             <button
@@ -904,21 +938,24 @@ function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: 
               onClick={() => onOpen(a.name)}
               className="surface-card group p-6 text-left transition hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]"
             >
-              <div className="flex items-start gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
-                  {a.name.split(" ").map((p) => p[0]).join("")}
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold">{a.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {a.role} · <span className="font-mono">{a.ext}</span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
+                    {a.name.split(" ").map((p) => p[0]).join("")}
+                  </div>
+                  <div>
+                    <div className="text-[15px] font-semibold">{a.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.role} · <span className="font-mono">{a.ext}</span>
+                    </div>
                   </div>
                 </div>
+                <Sparkline values={buckets.map((b) => b.count)} width={86} height={32} />
               </div>
               <div className="mt-6 flex items-end justify-between">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls</div>
-                  <div className="font-mono text-2xl">{cs.length}</div>
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls · {range}</div>
+                  <div className="font-display text-2xl font-semibold">{cs.length}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Avg sentiment</div>
