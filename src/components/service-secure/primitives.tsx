@@ -159,40 +159,51 @@ export function Sparkline({
   );
 }
 
-/** Stacked bar chart: pos/neu/neg per day. */
-export function DailyStackedBars({
+/** Stacked bar chart with arbitrary string labels (used for hourly or daily volume). */
+export function VolumeBars({
   data,
-  height = 140,
+  height = 160,
 }: {
-  data: { date: Date; count: number; pos: number; neg: number; neu: number }[];
+  data: { label: string; count: number; pos: number; neg: number; neu: number }[];
   height?: number;
 }) {
   const max = Math.max(1, ...data.map((d) => d.count));
+  const labelEvery = Math.max(1, Math.ceil(data.length / 12));
   return (
-    <div className="flex items-end gap-[3px]" style={{ height }}>
-      {data.map((d, i) => {
-        const h = (d.count / max) * (height - 18);
-        const pH = d.count ? (d.pos / d.count) * h : 0;
-        const uH = d.count ? (d.neu / d.count) * h : 0;
-        const nH = d.count ? (d.neg / d.count) * h : 0;
-        const showLabel = data.length <= 14 || i % Math.ceil(data.length / 10) === 0;
-        return (
-          <div key={i} className="group flex flex-1 flex-col items-center gap-1.5">
-            <div
-              className="flex w-full flex-col-reverse overflow-hidden rounded-sm bg-surface-2"
-              style={{ height: Math.max(h, 2) }}
-              title={`${d.date.toLocaleDateString()} · ${d.count} calls (${d.pos} pos, ${d.neu} neu, ${d.neg} neg)`}
-            >
-              <div style={{ height: pH, background: "var(--primary)" }} />
-              <div style={{ height: uH, background: "var(--neu)" }} />
-              <div style={{ height: nH, background: "var(--neg)" }} />
+    <div>
+      <div className="flex items-end gap-[3px]" style={{ height }}>
+        {data.map((d, i) => {
+          const h = (d.count / max) * (height - 4);
+          const pH = d.count ? (d.pos / d.count) * h : 0;
+          const uH = d.count ? (d.neu / d.count) * h : 0;
+          const nH = d.count ? (d.neg / d.count) * h : 0;
+          return (
+            <div key={i} className="group relative flex flex-1 flex-col items-center justify-end">
+              {d.count > 0 && (
+                <span className="pointer-events-none absolute -top-4 font-mono text-[9px] text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                  {d.count}
+                </span>
+              )}
+              <div
+                className="flex w-full flex-col-reverse overflow-hidden rounded-[3px] bg-surface-2/60 transition group-hover:bg-surface-2"
+                style={{ height: Math.max(h, 2) }}
+                title={`${d.label} · ${d.count} calls (${d.pos} pos, ${d.neu} neu, ${d.neg} neg)`}
+              >
+                <div style={{ height: pH, background: "var(--primary)" }} />
+                <div style={{ height: uH, background: "var(--neu)" }} />
+                <div style={{ height: nH, background: "var(--neg)" }} />
+              </div>
             </div>
-            <span className="font-mono text-[9px] text-muted-foreground">
-              {showLabel ? d.date.toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : ""}
-            </span>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex gap-[3px]">
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 text-center font-mono text-[9.5px] text-muted-foreground">
+            {i % labelEvery === 0 ? d.label : ""}
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
