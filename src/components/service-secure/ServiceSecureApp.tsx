@@ -1177,14 +1177,169 @@ function CallDetail({
               <Row k="Churn signal" v={c.flag === "at-risk" ? "Yes — provider switch mentioned" : "No"} />
             </dl>
           </div>
+          {(resolved || followUp) && (
+            <div className="rounded-lg border border-border bg-surface-2/50 p-3 text-[12.5px]">
+              {resolved && (
+                <div className="flex items-center gap-2 text-pos">
+                  <Check className="h-3.5 w-3.5" /> Marked resolved
+                </div>
+              )}
+              {followUp && (
+                <div className="mt-1 text-muted-foreground">
+                  <UserPlus className="mr-1.5 inline h-3.5 w-3.5 text-primary" />
+                  Follow-up assigned to{" "}
+                  <span className="font-medium text-foreground">{followUp.agent}</span>
+                  {" · due "}
+                  <span className="text-foreground">{followUp.due}</span>
+                  {followUp.note && (
+                    <div className="mt-1 italic">"{followUp.note}"</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
-            <button className="flex-1 rounded-lg bg-[image:var(--gradient-brand)] py-2.5 text-sm font-medium text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] transition hover:brightness-110">
-              Mark resolved
+            <button
+              onClick={onToggleResolved}
+              className={cn(
+                "flex-1 rounded-lg py-2.5 text-sm font-medium transition",
+                resolved
+                  ? "border border-pos/40 bg-pos/10 text-pos hover:bg-pos/15"
+                  : "bg-[image:var(--gradient-brand)] text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] hover:brightness-110",
+              )}
+            >
+              {resolved ? "Resolved ✓ Undo" : "Mark resolved"}
             </button>
-            <button className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium transition hover:bg-surface-2">
-              Assign follow-up
+            <button
+              onClick={() => setShowAssign(true)}
+              className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium transition hover:bg-surface-2"
+            >
+              {followUp ? "Edit follow-up" : "Assign follow-up"}
             </button>
           </div>
+        </div>
+      </div>
+      {showAssign && (
+        <AssignFollowUpModal
+          c={c}
+          initial={followUp}
+          onClose={() => setShowAssign(false)}
+          onSave={(fu) => {
+            onAssignFollowUp(fu);
+            setShowAssign(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AssignFollowUpModal({
+  c,
+  initial,
+  onClose,
+  onSave,
+}: {
+  c: Call;
+  initial?: FollowUp;
+  onClose: () => void;
+  onSave: (fu: FollowUp) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultDue = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const [agent, setAgent] = useState(initial?.agent ?? c.agent);
+  const [due, setDue] = useState(initial?.due ?? defaultDue);
+  const [note, setNote] = useState(
+    initial?.note ?? (c.flag === "at-risk" ? "Call the account back and offer a recovery gesture." : ""),
+  );
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center bg-[oklch(0_0_0/0.55)] p-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="surface-card w-full max-w-[460px] p-6"
+      >
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Follow-up
+            </div>
+            <h3 className="font-display mt-1 text-xl">Assign this call</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {c.acct || "Unmatched caller"} · {c.topic}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Assign to
+            </label>
+            <select
+              value={agent}
+              onChange={(e) => setAgent(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
+            >
+              {AGENTS.map((a) => (
+                <option key={a.name} value={a.name}>
+                  {a.name} · {a.role}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Due
+            </label>
+            <input
+              type="date"
+              value={due}
+              min={today}
+              onChange={(e) => setDue(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Note (optional)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="What should happen on the follow-up?"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none focus:border-primary/60"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium hover:bg-surface-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave({ agent, due, note: note.trim(), createdAt: new Date() })}
+            className="flex-1 rounded-lg bg-[image:var(--gradient-brand)] py-2.5 text-sm font-medium text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] transition hover:brightness-110"
+          >
+            Assign follow-up
+          </button>
         </div>
       </div>
     </div>
