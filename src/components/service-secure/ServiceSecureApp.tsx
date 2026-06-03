@@ -288,7 +288,7 @@ export default function ServiceSecureApp() {
               </div>
               <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">{screenLabel}</h1>
             </div>
-            {screen !== "integrations" && screen !== "notifications" && (
+            {screen !== "integrations" && screen !== "notifications" && screen !== "admin" && (
               <div className="flex flex-wrap items-center gap-2">
                 <RangePicker
                   range={range}
