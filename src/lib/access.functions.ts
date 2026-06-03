@@ -3,26 +3,20 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export type AppRole = "admin" | "coo" | "manager" | "agent";
-export const APP_ROLES: AppRole[] = ["admin", "coo", "manager", "agent"];
+export type JobTitle = "coo" | "manager" | "agent" | "contact" | "other";
+export const JOB_TITLES: JobTitle[] = ["coo", "manager", "agent", "contact", "other"];
 
 export type PersonRow = {
   id: string;
   name: string;
   email: string;
   phone: string;
-  roles: AppRole[];
+  title: JobTitle;
 };
 
-async function assertAdmin(userId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin role required");
+function normalizeTitle(t: string | null | undefined): JobTitle {
+  const v = (t ?? "").toLowerCase();
+  return (JOB_TITLES as string[]).includes(v) ? (v as JobTitle) : "other";
 }
 
 export const listPeople = createServerFn({ method: "GET" })
@@ -30,26 +24,16 @@ export const listPeople = createServerFn({ method: "GET" })
   .handler(async (): Promise<PersonRow[]> => {
     const { data: profiles, error: pErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, name, email, phone, created_at")
+      .select("id, name, email, phone, title, created_at")
       .order("created_at", { ascending: true });
     if (pErr) throw new Error(pErr.message);
-
-    const { data: roles, error: rErr } = await supabaseAdmin.from("user_roles").select("user_id, role");
-    if (rErr) throw new Error(rErr.message);
-
-    const roleMap = new Map<string, AppRole[]>();
-    for (const r of roles ?? []) {
-      const list = roleMap.get(r.user_id) ?? [];
-      list.push(r.role as AppRole);
-      roleMap.set(r.user_id, list);
-    }
 
     return (profiles ?? []).map((p) => ({
       id: p.id,
       name: p.name ?? "",
       email: p.email ?? "",
       phone: p.phone ?? "",
-      roles: roleMap.get(p.id) ?? [],
+      title: normalizeTitle((p as { title?: string }).title),
     }));
   });
 
@@ -58,65 +42,44 @@ const createInput = z.object({
   email: z.string().trim().email().max(255),
   phone: z.string().trim().max(40).optional().default(""),
   password: z.string().min(8).max(128),
-  role: z.enum(["admin", "coo", "manager", "agent"]),
+  title: z.enum(["coo", "manager", "agent", "contact", "other"]),
 });
 
 export const createPerson = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createInput.parse(data))
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
-
+  .handler(async ({ data }) => {
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
       email_confirm: true,
-      user_metadata: { name: data.name, phone: data.phone, role: data.role },
+      user_metadata: { name: data.name, phone: data.phone, title: data.title },
     });
     if (error || !created.user) throw new Error(error?.message ?? "Failed to create user");
 
-    // Profile + role rows are created by the on_auth_user_created trigger.
-    // If the caller picked a non-default role we still upsert to be safe.
+    // Trigger creates profile + admin role; ensure title is set (in case metadata missed).
     await supabaseAdmin
-      .from("user_roles")
-      .upsert({ user_id: created.user.id, role: data.role }, { onConflict: "user_id,role" });
+      .from("profiles")
+      .update({ name: data.name, phone: data.phone, title: data.title })
+      .eq("id", created.user.id);
 
     return { ok: true, id: created.user.id };
-  });
-
-const updateRoleInput = z.object({
-  userId: z.string().uuid(),
-  role: z.enum(["admin", "coo", "manager", "agent"]),
-});
-
-export const setPersonRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => updateRoleInput.parse(d))
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
-    const { error: delErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
-    if (delErr) throw new Error(delErr.message);
-    const { error: insErr } = await supabaseAdmin
-      .from("user_roles")
-      .insert({ user_id: data.userId, role: data.role });
-    if (insErr) throw new Error(insErr.message);
-    return { ok: true };
   });
 
 const updateProfileInput = z.object({
   userId: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(40).default(""),
+  title: z.enum(["coo", "manager", "agent", "contact", "other"]),
 });
 
 export const updatePerson = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => updateProfileInput.parse(d))
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
+  .handler(async ({ data }) => {
     const { error } = await supabaseAdmin
       .from("profiles")
-      .update({ name: data.name, phone: data.phone })
+      .update({ name: data.name, phone: data.phone, title: data.title })
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -128,7 +91,6 @@ export const deletePerson = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
     if (data.userId === context.userId) throw new Error("You cannot delete your own account");
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw new Error(error.message);
@@ -138,18 +100,20 @@ export const deletePerson = createServerFn({ method: "POST" })
 export const getMyAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: roles } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", context.userId);
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("id, name, email, phone")
+      .select("id, name, email, phone, title")
       .eq("id", context.userId)
       .maybeSingle();
     return {
-      profile,
-      roles: (roles ?? []).map((r) => r.role as AppRole),
-      isAdmin: (roles ?? []).some((r) => r.role === "admin"),
+      profile: profile
+        ? {
+            id: profile.id,
+            name: profile.name ?? "",
+            email: profile.email ?? "",
+            phone: profile.phone ?? "",
+            title: normalizeTitle((profile as { title?: string }).title),
+          }
+        : null,
     };
   });
