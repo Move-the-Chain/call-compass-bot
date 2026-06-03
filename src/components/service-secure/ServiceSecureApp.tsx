@@ -85,9 +85,20 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "notifications", label: "Notifications", icon: Bell },
 ];
 
-export type Role = "coo" | "manager" | "agent" | "contact" | "other";
-export const ROLES: Role[] = ["coo", "manager", "agent", "contact", "other"];
-export const ROLE_LABEL: Record<Role, string> = { coo: "COO", manager: "Manager", agent: "Agent", contact: "Contact", other: "Other" };
+export type Role = string;
+export const TITLE_SUGGESTIONS = ["COO", "Manager", "Agent", "Contact", "Sales", "Support"];
+export function roleLabel(r: string): string {
+  const s = (r ?? "").trim();
+  if (!s) return "—";
+  if (s.length <= 4) return s.toUpperCase();
+  return s
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+// Back-compat exports (some call sites still reference these)
+export const ROLES: Role[] = TITLE_SUGGESTIONS;
+export const ROLE_LABEL = new Proxy({} as Record<string, string>, { get: (_t, k: string) => roleLabel(k) });
 export type Person = { id: string; name: string; email: string; phone: string; role: Role };
 export type Priority = "Low" | "Medium" | "High" | "Urgent";
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
@@ -1961,18 +1972,19 @@ function AccessManagementView({ people }: { people: Person[] }) {
     onSuccess: refresh,
   });
 
-  const counts = ROLES.reduce<Record<string, number>>((acc, r) => {
-    acc[r] = people.filter((p) => p.role === r).length;
+  const titleCounts = people.reduce<Record<string, number>>((acc, p) => {
+    const key = (p.role || "Untitled").trim() || "Untitled";
+    acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 
-  const blank: PersonDraft = { name: "", email: "", phone: "", role: "agent", password: "" };
+  const blank: PersonDraft = { name: "", email: "", phone: "", role: "", password: "" };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Agent, Contact) is how notifications and routing decide who to ping.
+          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Head of Sales, etc.) is how notifications and routing decide who to ping.
         </p>
         <button
           onClick={() => setEditing(blank)}
@@ -1983,8 +1995,8 @@ function AccessManagementView({ people }: { people: Person[] }) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {ROLES.map((r) => (
-          <Chip key={r} tone="muted">{ROLE_LABEL[r]} · {counts[r] ?? 0}</Chip>
+        {Object.entries(titleCounts).map(([r, n]) => (
+          <Chip key={r} tone="muted">{roleLabel(r)} · {n}</Chip>
         ))}
       </div>
 
@@ -2045,9 +2057,16 @@ function PersonModal({ person, isNew, busy, error, onClose, onSave }: { person: 
           </Field>
           <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
           <Field label="Title">
-            <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
-              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
+            <input
+              list="title-suggestions"
+              value={draft.role}
+              onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+              placeholder="e.g. COO, Manager, Head of Sales"
+              className="modal-input"
+            />
+            <datalist id="title-suggestions">
+              {TITLE_SUGGESTIONS.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </Field>
           {isNew && (
             <Field label="Temporary password (min 8 chars)">
@@ -2144,7 +2163,8 @@ function NotificationsView({
         <div className="surface-card overflow-hidden p-0">
           {rules.map((r, i) => {
             const chs = [r.channels.slack && "Slack", r.channels.email && "Email", r.channels.sms && "SMS"].filter(Boolean).join(" + ") || "No channel";
-            const recipientCount = r.recipientIds.length + people.filter((p) => r.recipientRoles.includes(p.role)).filter((p) => !r.recipientIds.includes(p.id)).length;
+            const rolesLc = r.recipientRoles.map((x) => x.toLowerCase());
+            const recipientCount = r.recipientIds.length + people.filter((p) => rolesLc.includes(p.role.toLowerCase())).filter((p) => !r.recipientIds.includes(p.id)).length;
             return (
               <div key={r.id} className={cn("flex flex-wrap items-center justify-between gap-4 px-5 py-4", i ? "border-t border-border" : "")}>
                 <div className="min-w-0 flex-1">
@@ -2221,7 +2241,7 @@ function ChannelCard({ icon: Icon, title, desc, on, onToggle, disabled, footer }
 function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void }) {
   const [draft, setDraft] = useState<AlertRule>(rule);
   const toggleRole = (r: Role) =>
-    setDraft((d) => ({ ...d, recipientRoles: d.recipientRoles.includes(r) ? d.recipientRoles.filter((x) => x !== r) : [...d.recipientRoles, r] }));
+    setDraft((d) => ({ ...d, recipientRoles: d.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? d.recipientRoles.filter((x) => x.toLowerCase() !== r.toLowerCase()) : [...d.recipientRoles, r] }));
   const togglePerson = (id: string) =>
     setDraft((d) => ({ ...d, recipientIds: d.recipientIds.includes(id) ? d.recipientIds.filter((x) => x !== id) : [...d.recipientIds, id] }));
 
@@ -2273,20 +2293,21 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
             </div>
           </Field>
 
-          <Field label="Notify roles">
+          <Field label="Notify titles">
             <div className="flex flex-wrap gap-2">
-              {ROLES.map((r) => (
+              {Array.from(new Set([...people.map((p) => p.role), ...draft.recipientRoles].filter(Boolean))).map((r) => (
                 <button
                   key={r}
                   onClick={() => toggleRole(r)}
                   className={cn(
                     "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
-                    draft.recipientRoles.includes(r) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                    draft.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
                   )}
                 >
-                  {ROLE_LABEL[r]}
+                  {roleLabel(r)}
                 </button>
               ))}
+              {people.length === 0 && <div className="text-xs text-muted-foreground">Add people in Access Management to target by title.</div>}
             </div>
           </Field>
 

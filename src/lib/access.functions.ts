@@ -3,20 +3,16 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export type JobTitle = "coo" | "manager" | "agent" | "contact" | "other";
-export const JOB_TITLES: JobTitle[] = ["coo", "manager", "agent", "contact", "other"];
-
 export type PersonRow = {
   id: string;
   name: string;
   email: string;
   phone: string;
-  title: JobTitle;
+  title: string;
 };
 
-function normalizeTitle(t: string | null | undefined): JobTitle {
-  const v = (t ?? "").toLowerCase();
-  return (JOB_TITLES as string[]).includes(v) ? (v as JobTitle) : "other";
+function normalizeTitle(t: string | null | undefined): string {
+  return (t ?? "").toString().trim().slice(0, 80);
 }
 
 export const listPeople = createServerFn({ method: "GET" })
@@ -42,7 +38,7 @@ const createInput = z.object({
   email: z.string().trim().email().max(255),
   phone: z.string().trim().max(40).optional().default(""),
   password: z.string().min(8).max(128),
-  title: z.enum(["coo", "manager", "agent", "contact", "other"]),
+  title: z.string().trim().max(80).default(""),
 });
 
 export const createPerson = createServerFn({ method: "POST" })
@@ -70,7 +66,7 @@ const updateProfileInput = z.object({
   userId: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(40).default(""),
-  title: z.enum(["coo", "manager", "agent", "contact", "other"]),
+  title: z.string().trim().max(80).default(""),
 });
 
 export const updatePerson = createServerFn({ method: "POST" })
