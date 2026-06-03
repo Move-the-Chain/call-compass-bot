@@ -983,8 +983,23 @@ function AccountDetail({ cl, onBack, onCall }: { cl: Client; onBack: () => void;
 }
 
 /* ---------------- Call Detail ---------------- */
-function CallDetail({ c, onBack }: { c: Call; onBack: () => void }) {
+function CallDetail({
+  c,
+  onBack,
+  resolved,
+  followUp,
+  onToggleResolved,
+  onAssignFollowUp,
+}: {
+  c: Call;
+  onBack: () => void;
+  resolved: boolean;
+  followUp?: FollowUp;
+  onToggleResolved: () => void;
+  onAssignFollowUp: (fu: FollowUp) => void;
+}) {
   const [playing, setPlaying] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   const ag = agentOf(c.agent);
