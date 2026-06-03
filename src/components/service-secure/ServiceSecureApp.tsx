@@ -336,6 +336,7 @@ export default function ServiceSecureApp() {
             followUp={followUps[sel.id]}
             onToggleResolved={() => toggleResolved(sel.id)}
             onAssignFollowUp={(fu) => assignFollowUp(sel.id, fu)}
+            onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
         {screen === "integrations" && <IntegrationsView />}
