@@ -986,23 +986,28 @@ function AgentsView({
 /* ---------------- Agent Detail ---------------- */
 function AgentDetail({
   name,
+  rangeCalls,
   range,
+  customStart,
+  customEnd,
   onBack,
   onCall,
 }: {
   name: string;
+  rangeCalls: Call[];
   range: string;
+  customStart: string;
+  customEnd: string;
   onBack: () => void;
   onCall: (c: Call) => void;
 }) {
   const a = agentOf(name);
-  const cs = CALLS.filter((c) => c.agent === name);
+  const cs = rangeCalls.filter((c) => c.agent === name);
   const p = cs.filter((c) => c.sent > 0.1).length;
   const n = cs.filter((c) => c.sent < -0.1).length;
-  const nu = cs.length - p - n;
   const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-  const sl = sentLabel(avg);
   const longest = cs.length ? Math.max(...cs.map((c) => c.dur)) : 0;
+  const buckets = dailyBuckets(cs, range, customStart, customEnd);
 
   return (
     <div>
@@ -1042,20 +1047,29 @@ function AgentDetail({
         <Kpi label="Longest call" value={longest ? mmss(longest) : "—"} sub="duration" />
       </div>
 
-      <div className="surface-card mt-6 p-6">
-        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Sentiment split</div>
-        <div className="mb-3 flex h-3 overflow-hidden rounded-full bg-surface-2">
-          {cs.length > 0 && (
-            <>
-              <div className="bg-pos" style={{ width: `${(p / cs.length) * 100}%` }} />
-              <div className="bg-neu" style={{ width: `${(nu / cs.length) * 100}%` }} />
-              <div className="bg-neg" style={{ width: `${(n / cs.length) * 100}%` }} />
-            </>
-          )}
+      {buckets.length > 1 && (
+        <div className="surface-card mt-6 p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Calls per day</div>
+              <div className="font-display mt-1 text-lg">{range}</div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "var(--primary)" }} />positive</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
+            </div>
+          </div>
+          <DailyStackedBars data={buckets} />
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{p} positive · {nu} neutral · {n} negative</span>
-          <span className={sl.cls}>Avg: {sl.txt}</span>
+      )}
+
+      <div className="surface-card mt-6 p-6">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Sentiment balance</div>
+        <DivergingBar avg={avg} pos={p} neg={n} total={cs.length} height={12} />
+        <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+          <span>{n} negative · {cs.length - p - n} neutral · {p} positive</span>
+          <span className="font-mono">avg {avg.toFixed(2)}</span>
         </div>
       </div>
 
