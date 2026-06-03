@@ -110,6 +110,7 @@ export default function ServiceSecureApp() {
   const [q, setQ] = useState("");
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
+  const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
 
   const toggleResolved = (id: number) =>
     setResolved((prev) => {
@@ -120,6 +121,10 @@ export default function ServiceSecureApp() {
     });
   const assignFollowUp = (id: number, fu: FollowUp) =>
     setFollowUps((prev) => ({ ...prev, [id]: fu }));
+  const assignAccount = (id: number, name: string) => {
+    setAcctOverrides((prev) => ({ ...prev, [id]: name }));
+    setSel((s) => (s && s.id === id ? { ...s, acct: name, flag: s.flag === "unmatched" ? undefined : s.flag, match: "manual" } : s));
+  };
 
   const open = (c: Call) => {
     setSel(c);
@@ -135,8 +140,13 @@ export default function ServiceSecureApp() {
   };
 
   const rangeCalls = useMemo(
-    () => filterCalls(range, customStart, customEnd),
-    [range, customStart, customEnd],
+    () =>
+      filterCalls(range, customStart, customEnd).map((c) =>
+        acctOverrides[c.id]
+          ? { ...c, acct: acctOverrides[c.id], flag: c.flag === "unmatched" ? undefined : c.flag, match: "manual" as const }
+          : c,
+      ),
+    [range, customStart, customEnd, acctOverrides],
   );
 
   const filtered = useMemo(
