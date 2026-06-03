@@ -2094,7 +2094,7 @@ function NotificationsView({
       <header>
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
         <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Notifications</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Admin Center</button>.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>.</p>
       </header>
 
       <section>
@@ -2105,11 +2105,11 @@ function NotificationsView({
           <ChannelCard
             icon={Phone}
             title="SMS (Twilio)"
-            desc={smsReady ? "Texts the phone numbers in Admin Center" : "Add phone numbers in Admin Center first"}
+            desc={smsReady ? "Texts the phone numbers in Access Management" : "Add phone numbers in Access Management first"}
             on={channels.sms}
             disabled={!smsReady}
             onToggle={() => smsReady && setChannels((c) => ({ ...c, sms: !c.sms }))}
-            footer={!smsReady ? <button onClick={onGoAdmin} className="text-xs font-medium text-primary hover:underline">Go to Admin Center →</button> : null}
+            footer={!smsReady ? <button onClick={onGoAdmin} className="text-xs font-medium text-primary hover:underline">Go to Access Management →</button> : null}
           />
         </div>
       </section>
