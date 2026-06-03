@@ -2298,43 +2298,57 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
             </div>
           </Field>
 
-          <Field label="Notify titles">
-            <div className="flex flex-wrap gap-2">
-              {Array.from(new Set([...people.map((p) => p.role), ...draft.recipientRoles].filter(Boolean))).map((r) => (
+          <Field label="Notify">
+            <div className="mb-3 inline-flex rounded-lg border border-border p-1">
+              {(["roles", "people"] as const).map((m) => (
                 <button
-                  key={r}
-                  onClick={() => toggleRole(r)}
+                  key={m}
+                  onClick={() => switchMode(m)}
                   className={cn(
-                    "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
-                    draft.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                    "rounded-md px-3 py-1.5 text-[12.5px] font-medium transition",
+                    mode === m ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-surface-2",
                   )}
                 >
-                  {roleLabel(r)}
+                  {m === "roles" ? "By title" : "Specific people"}
                 </button>
               ))}
-              {people.length === 0 && <div className="text-xs text-muted-foreground">Add people in Access Management to target by title.</div>}
             </div>
-          </Field>
-
-          <Field label="Notify specific people">
-            <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Access Management.</div>}
-              {people.map((p) => {
-                const checked = draft.recipientIds.includes(p.id);
-                return (
-                  <label key={p.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-2">
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" checked={checked} onChange={() => togglePerson(p.id)} className="h-4 w-4 accent-[var(--primary)]" />
-                      <div>
-                        <div className="text-[13px] font-medium">{p.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{ROLE_LABEL[p.role]} · {p.phone || "no phone"}</div>
+            {mode === "roles" ? (
+              <div className="flex flex-wrap gap-2">
+                {Array.from(new Set([...people.map((p) => p.role), ...draft.recipientRoles].filter(Boolean))).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => toggleRole(r)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
+                      draft.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                    )}
+                  >
+                    {roleLabel(r)}
+                  </button>
+                ))}
+                {people.length === 0 && <div className="text-xs text-muted-foreground">Add people in Access Management to target by title.</div>}
+              </div>
+            ) : (
+              <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+                {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Access Management.</div>}
+                {people.map((p) => {
+                  const checked = draft.recipientIds.includes(p.id);
+                  return (
+                    <label key={p.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-2">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked} onChange={() => togglePerson(p.id)} className="h-4 w-4 accent-[var(--primary)]" />
+                        <div>
+                          <div className="text-[13px] font-medium">{p.name}</div>
+                          <div className="text-[11px] text-muted-foreground">{roleLabel(p.role)} · {p.phone || "no phone"}</div>
+                        </div>
                       </div>
-                    </div>
-                    {draft.channels.sms && checked && !p.phone && <Chip tone="neg">No phone</Chip>}
-                  </label>
-                );
-              })}
-            </div>
+                      {draft.channels.sms && checked && !p.phone && <Chip tone="neg">No phone</Chip>}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </Field>
 
           {smsMissingPhones && (
