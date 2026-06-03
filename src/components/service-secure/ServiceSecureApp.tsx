@@ -1056,7 +1056,7 @@ function AgentDetail({
         <div className="surface-card mt-6 p-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Calls per day</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{range === "Today" ? "Calls by hour" : "Calls per day"}</div>
               <div className="font-display mt-1 text-lg">{range}</div>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
