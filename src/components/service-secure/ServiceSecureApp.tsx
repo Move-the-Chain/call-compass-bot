@@ -2100,11 +2100,7 @@ function NotificationsView({
 
   return (
     <div className="space-y-8">
-      <header>
-        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
-        <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Notifications</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>.</p>
-      </header>
+      <p className="-mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>.</p>
 
       <section>
         <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Channels</div>
