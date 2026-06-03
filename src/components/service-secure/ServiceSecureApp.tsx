@@ -37,6 +37,7 @@ type Screen =
   | "summary"
   | "explorer"
   | "agents"
+  | "agentDetail"
   | "accounts"
   | "accountDetail"
   | "detail"
