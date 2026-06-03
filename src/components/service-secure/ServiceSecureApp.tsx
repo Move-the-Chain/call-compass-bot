@@ -247,7 +247,7 @@ export default function ServiceSecureApp() {
                   onClick={() =>
                     downloadCSV(
                       `calls-${range.toLowerCase().replace(/\s+/g, "-")}.csv`,
-                      callsToRows(CALLS),
+                      callsToRows(rangeCalls),
                     )
                   }
                   className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[12.5px] font-medium transition hover:border-border-strong hover:bg-surface-2"
