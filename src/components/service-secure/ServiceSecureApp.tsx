@@ -123,7 +123,11 @@ export default function ServiceSecureApp() {
     setFollowUps((prev) => ({ ...prev, [id]: fu }));
   const assignAccount = (id: number, name: string) => {
     setAcctOverrides((prev) => ({ ...prev, [id]: name }));
-    setSel((s) => (s && s.id === id ? { ...s, acct: name, flag: s.flag === "unmatched" ? undefined : s.flag, match: "manual" } : s));
+    setSel((s) =>
+      s && s.id === id
+        ? { ...s, acct: name, flag: s.flag === "unmatched" ? "neutral" : s.flag, match: "name" }
+        : s,
+    );
   };
 
   const open = (c: Call) => {
@@ -139,11 +143,11 @@ export default function ServiceSecureApp() {
     setScreen("agentDetail");
   };
 
-  const rangeCalls = useMemo(
+  const rangeCalls = useMemo<Call[]>(
     () =>
       filterCalls(range, customStart, customEnd).map((c) =>
         acctOverrides[c.id]
-          ? { ...c, acct: acctOverrides[c.id], flag: c.flag === "unmatched" ? undefined : c.flag, match: "manual" as const }
+          ? { ...c, acct: acctOverrides[c.id], flag: c.flag === "unmatched" ? "neutral" : c.flag, match: "name" }
           : c,
       ),
     [range, customStart, customEnd, acctOverrides],
