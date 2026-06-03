@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Check,
   Download,
   Headphones,
   LayoutGrid,
@@ -13,7 +14,9 @@ import {
   Plug,
   Search,
   Sparkles,
+  UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import {
   AGENTS,
@@ -80,6 +83,8 @@ function callsToRows(calls: Call[]): (string | number)[][] {
   return [head, ...body];
 }
 
+export type FollowUp = { agent: string; due: string; note: string; createdAt: Date };
+
 export default function ServiceSecureApp() {
   const [screen, setScreen] = useState<Screen>("summary");
   const [sel, setSel] = useState<Call | null>(null);
@@ -89,6 +94,18 @@ export default function ServiceSecureApp() {
   const [fAcct, setFAcct] = useState("All");
   const [fSent, setFSent] = useState("All");
   const [q, setQ] = useState("");
+  const [resolved, setResolved] = useState<Set<number>>(new Set());
+  const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
+
+  const toggleResolved = (id: number) =>
+    setResolved((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const assignFollowUp = (id: number, fu: FollowUp) =>
+    setFollowUps((prev) => ({ ...prev, [id]: fu }));
 
   const open = (c: Call) => {
     setSel(c);
@@ -204,6 +221,8 @@ export default function ServiceSecureApp() {
             range={range}
             todosNeg={todosNeg}
             todosPos={todosPos}
+            resolved={resolved}
+            followUps={followUps}
             onOpen={open}
           />
         )}
@@ -227,7 +246,16 @@ export default function ServiceSecureApp() {
         {screen === "accountDetail" && acctSel && (
           <AccountDetail cl={acctSel} onBack={() => setScreen("accounts")} onCall={open} />
         )}
-        {screen === "detail" && sel && <CallDetail c={sel} onBack={() => setScreen("explorer")} />}
+        {screen === "detail" && sel && (
+          <CallDetail
+            c={sel}
+            onBack={() => setScreen("explorer")}
+            resolved={resolved.has(sel.id)}
+            followUp={followUps[sel.id]}
+            onToggleResolved={() => toggleResolved(sel.id)}
+            onAssignFollowUp={(fu) => assignFollowUp(sel.id, fu)}
+          />
+        )}
         {screen === "integrations" && <IntegrationsView />}
         {screen === "notifications" && <NotificationsView />}
       </main>
@@ -265,6 +293,8 @@ function SummaryView({
   range,
   todosNeg,
   todosPos,
+  resolved,
+  followUps,
   onOpen,
 }: {
   total: number;
@@ -274,10 +304,15 @@ function SummaryView({
   range: string;
   todosNeg: Call[];
   todosPos: Call[];
+  resolved: Set<number>;
+  followUps: Record<number, FollowUp>;
   onOpen: (c: Call) => void;
 }) {
+  const [tab, setTab] = useState<"review" | "sentiment">("review");
+  const openReview = todosNeg.filter((c) => !resolved.has(c.id));
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Total calls" value={total} sub={range} />
         <Kpi label="Positive" value={`${Math.round((pos / total) * 100)}%`} sub={`${pos} calls`} tone="pos" />
@@ -285,91 +320,236 @@ function SummaryView({
         <Kpi label="Unmatched" value={unmatched} sub="need linking" tone="neu" />
       </div>
 
-      <div className="surface-card p-6">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Sentiment by Agent
-            </div>
-            <div className="font-display mt-1 text-xl">How the team sounded today</div>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border">
+        {[
+          { k: "review" as const, label: "To review", count: openReview.length, icon: AlertTriangle },
+          { k: "sentiment" as const, label: "Sentiment", count: undefined as number | undefined, icon: BarChart3 },
+        ].map(({ k, label, count, icon: Icon }) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={cn(
+              "-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13.5px] font-medium transition",
+              tab === k
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+            {count != null && count > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 font-mono text-[10.5px]",
+                  tab === k ? "bg-neg/15 text-neg" : "bg-surface-2 text-muted-foreground",
+                )}
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "review" && (
+        <ReviewFeed
+          todosNeg={todosNeg}
+          todosPos={todosPos}
+          resolved={resolved}
+          followUps={followUps}
+          onOpen={onOpen}
+        />
+      )}
+      {tab === "sentiment" && <SentimentTab />}
+    </div>
+  );
+}
+
+/* ---------------- Review feed tab ---------------- */
+function ReviewFeed({
+  todosNeg,
+  todosPos,
+  resolved,
+  followUps,
+  onOpen,
+}: {
+  todosNeg: Call[];
+  todosPos: Call[];
+  resolved: Set<number>;
+  followUps: Record<number, FollowUp>;
+  onOpen: (c: Call) => void;
+}) {
+  const [filter, setFilter] = useState<"open" | "resolved" | "positive">("open");
+  const openItems = todosNeg.filter((c) => !resolved.has(c.id));
+  const resolvedItems = todosNeg.filter((c) => resolved.has(c.id));
+  const list = filter === "open" ? openItems : filter === "resolved" ? resolvedItems : todosPos;
+
+  return (
+    <section>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">
+            {filter === "positive" ? "Positive standouts" : "Calls to review"}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {filter === "open" && "Sorted by account tier · highest priority first"}
+            {filter === "resolved" && "Already handled"}
+            {filter === "positive" && "Worth recognizing"}
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
+          {(
+            [
+              ["open", `Open · ${openItems.length}`],
+              ["resolved", `Resolved · ${resolvedItems.length}`],
+              ["positive", `Positive · ${todosPos.length}`],
+            ] as const
+          ).map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                filter === k
+                  ? "bg-surface-2 text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {list.map((c) => (
+          <Brief
+            key={c.id}
+            c={c}
+            onClick={() => onOpen(c)}
+            resolved={resolved.has(c.id)}
+            followUp={followUps[c.id]}
+          />
+        ))}
+        {!list.length && (
+          <div className="surface-card p-10 text-center text-sm text-muted-foreground">
+            {filter === "open" ? "All caught up. Nothing needs attention." : "Nothing here yet."}
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Sentiment tab ---------------- */
+function SentimentTab() {
+  const [mode, setMode] = useState<"agent" | "account">("agent");
+  const groups =
+    mode === "agent"
+      ? AGENTS.map((a) => ({
+          key: a.name,
+          title: a.name,
+          subtitle: a.role,
+          calls: CALLS.filter((c) => c.agent === a.name),
+        }))
+      : CLIENTS.map((cl) => ({
+          key: cl.name,
+          title: cl.name,
+          subtitle: `Tier ${cl.tier}`,
+          calls: CALLS.filter((c) => c.acct === cl.name),
+        }));
+
+  return (
+    <div className="surface-card p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Overall sentiment
+          </div>
+          <div className="font-display mt-1 text-xl">
+            {mode === "agent" ? "By employee" : "By company"}
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
+            {(
+              [
+                ["agent", "By employee"],
+                ["account", "By company"],
+              ] as const
+            ).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setMode(k)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                  mode === k ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-pos" />positive</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
           </div>
         </div>
-        <div className="space-y-3">
-          {AGENTS.map((a) => {
-            const cs = CALLS.filter((c) => c.agent === a.name);
-            if (!cs.length) return null;
-            const p = cs.filter((c) => c.sent > 0.1).length;
-            const n = cs.filter((c) => c.sent < -0.1).length;
-            const ne = cs.length - p - n;
-            return (
-              <div key={a.name} className="flex items-center gap-4">
-                <div className="w-44 text-[13px]">
-                  <div className="truncate font-medium">{a.name}</div>
-                  <div className="text-[11px] text-muted-foreground">{a.role}</div>
-                </div>
-                <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
-                  <div className="bg-pos transition-all" style={{ width: `${(p / cs.length) * 100}%` }} />
-                  <div className="bg-neu transition-all" style={{ width: `${(ne / cs.length) * 100}%` }} />
-                  <div className="bg-neg transition-all" style={{ width: `${(n / cs.length) * 100}%` }} />
-                </div>
-                <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">{cs.length}</div>
-              </div>
-            );
-          })}
-        </div>
       </div>
-
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-display text-2xl">To review</h2>
-            <p className="text-sm text-muted-foreground">Sorted by account tier · highest priority first</p>
-          </div>
-          <Chip tone="neg">
-            <AlertTriangle className="h-3 w-3" /> {todosNeg.length} need attention
-          </Chip>
-        </div>
-        <div className="grid gap-3">
-          {todosNeg.map((c) => (
-            <Brief key={c.id} c={c} onClick={() => onOpen(c)} />
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-display text-2xl text-pos">Positive standouts</h2>
-            <p className="text-sm text-muted-foreground">Worth recognizing</p>
-          </div>
-        </div>
-        <div className="grid gap-3">
-          {todosPos.map((c) => (
-            <Brief key={c.id} c={c} onClick={() => onOpen(c)} />
-          ))}
-        </div>
-      </section>
+      <div className="space-y-3">
+        {groups.map((g) => {
+          if (!g.calls.length) return null;
+          const p = g.calls.filter((c) => c.sent > 0.1).length;
+          const n = g.calls.filter((c) => c.sent < -0.1).length;
+          const ne = g.calls.length - p - n;
+          return (
+            <div key={g.key} className="flex items-center gap-4">
+              <div className="w-44 text-[13px]">
+                <div className="truncate font-medium">{g.title}</div>
+                <div className="text-[11px] text-muted-foreground">{g.subtitle}</div>
+              </div>
+              <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
+                <div className="bg-pos transition-all" style={{ width: `${(p / g.calls.length) * 100}%` }} />
+                <div className="bg-neu transition-all" style={{ width: `${(ne / g.calls.length) * 100}%` }} />
+                <div className="bg-neg transition-all" style={{ width: `${(n / g.calls.length) * 100}%` }} />
+              </div>
+              <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {g.calls.length}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
+function Brief({
+  c,
+  onClick,
+  resolved,
+  followUp,
+}: {
+  c: Call;
+  onClick: () => void;
+  resolved?: boolean;
+  followUp?: FollowUp;
+}) {
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   return (
     <button
       onClick={onClick}
-      className="group surface-card relative w-full overflow-hidden p-5 text-left transition-all hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]"
+      className={cn(
+        "group surface-card relative w-full overflow-hidden p-5 text-left transition-all hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]",
+        resolved && "opacity-70",
+      )}
     >
       <span
         className={cn(
           "absolute inset-y-0 left-0 w-[3px] transition-all",
-          sl.tone === "neg" ? "bg-neg" : sl.tone === "pos" ? "bg-pos" : "bg-neu",
+          resolved ? "bg-pos" : sl.tone === "neg" ? "bg-neg" : sl.tone === "pos" ? "bg-pos" : "bg-neu",
         )}
       />
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -378,7 +558,19 @@ function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
           {cl && <TierBadge t={cl.tier} />}
           <Chip tone={sl.tone}>{sl.txt}</Chip>
           <Chip>{c.topic}</Chip>
-          {c.follow === "Needs follow-up" && <Chip tone="neu">Needs follow-up</Chip>}
+          {resolved && (
+            <Chip tone="pos">
+              <Check className="h-3 w-3" /> Resolved
+            </Chip>
+          )}
+          {!resolved && followUp && (
+            <Chip tone="primary">
+              <UserPlus className="h-3 w-3" /> Follow-up · {followUp.agent}
+            </Chip>
+          )}
+          {!resolved && !followUp && c.follow === "Needs follow-up" && (
+            <Chip tone="neu">Needs follow-up</Chip>
+          )}
         </div>
         <span className="font-mono text-xs text-muted-foreground">
           {fmtTime(c.time)} · {mmss(c.dur)}
@@ -388,6 +580,11 @@ function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
       <div className="mt-3 text-[11.5px] text-muted-foreground">
         Handled by <span className="text-foreground">{c.agent}</span>
         {agentOf(c.agent) ? ` · ${agentOf(c.agent)!.role}` : ""}
+        {followUp && (
+          <>
+            {" · "}follow-up due <span className="text-foreground">{followUp.due}</span>
+          </>
+        )}
       </div>
     </button>
   );
@@ -786,8 +983,23 @@ function AccountDetail({ cl, onBack, onCall }: { cl: Client; onBack: () => void;
 }
 
 /* ---------------- Call Detail ---------------- */
-function CallDetail({ c, onBack }: { c: Call; onBack: () => void }) {
+function CallDetail({
+  c,
+  onBack,
+  resolved,
+  followUp,
+  onToggleResolved,
+  onAssignFollowUp,
+}: {
+  c: Call;
+  onBack: () => void;
+  resolved: boolean;
+  followUp?: FollowUp;
+  onToggleResolved: () => void;
+  onAssignFollowUp: (fu: FollowUp) => void;
+}) {
   const [playing, setPlaying] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   const ag = agentOf(c.agent);
@@ -965,14 +1177,169 @@ function CallDetail({ c, onBack }: { c: Call; onBack: () => void }) {
               <Row k="Churn signal" v={c.flag === "at-risk" ? "Yes — provider switch mentioned" : "No"} />
             </dl>
           </div>
+          {(resolved || followUp) && (
+            <div className="rounded-lg border border-border bg-surface-2/50 p-3 text-[12.5px]">
+              {resolved && (
+                <div className="flex items-center gap-2 text-pos">
+                  <Check className="h-3.5 w-3.5" /> Marked resolved
+                </div>
+              )}
+              {followUp && (
+                <div className="mt-1 text-muted-foreground">
+                  <UserPlus className="mr-1.5 inline h-3.5 w-3.5 text-primary" />
+                  Follow-up assigned to{" "}
+                  <span className="font-medium text-foreground">{followUp.agent}</span>
+                  {" · due "}
+                  <span className="text-foreground">{followUp.due}</span>
+                  {followUp.note && (
+                    <div className="mt-1 italic">"{followUp.note}"</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
-            <button className="flex-1 rounded-lg bg-[image:var(--gradient-brand)] py-2.5 text-sm font-medium text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] transition hover:brightness-110">
-              Mark resolved
+            <button
+              onClick={onToggleResolved}
+              className={cn(
+                "flex-1 rounded-lg py-2.5 text-sm font-medium transition",
+                resolved
+                  ? "border border-pos/40 bg-pos/10 text-pos hover:bg-pos/15"
+                  : "bg-[image:var(--gradient-brand)] text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] hover:brightness-110",
+              )}
+            >
+              {resolved ? "Resolved ✓ Undo" : "Mark resolved"}
             </button>
-            <button className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium transition hover:bg-surface-2">
-              Assign follow-up
+            <button
+              onClick={() => setShowAssign(true)}
+              className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium transition hover:bg-surface-2"
+            >
+              {followUp ? "Edit follow-up" : "Assign follow-up"}
             </button>
           </div>
+        </div>
+      </div>
+      {showAssign && (
+        <AssignFollowUpModal
+          c={c}
+          initial={followUp}
+          onClose={() => setShowAssign(false)}
+          onSave={(fu) => {
+            onAssignFollowUp(fu);
+            setShowAssign(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AssignFollowUpModal({
+  c,
+  initial,
+  onClose,
+  onSave,
+}: {
+  c: Call;
+  initial?: FollowUp;
+  onClose: () => void;
+  onSave: (fu: FollowUp) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultDue = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const [agent, setAgent] = useState(initial?.agent ?? c.agent);
+  const [due, setDue] = useState(initial?.due ?? defaultDue);
+  const [note, setNote] = useState(
+    initial?.note ?? (c.flag === "at-risk" ? "Call the account back and offer a recovery gesture." : ""),
+  );
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center bg-[oklch(0_0_0/0.55)] p-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="surface-card w-full max-w-[460px] p-6"
+      >
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Follow-up
+            </div>
+            <h3 className="font-display mt-1 text-xl">Assign this call</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {c.acct || "Unmatched caller"} · {c.topic}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Assign to
+            </label>
+            <select
+              value={agent}
+              onChange={(e) => setAgent(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
+            >
+              {AGENTS.map((a) => (
+                <option key={a.name} value={a.name}>
+                  {a.name} · {a.role}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Due
+            </label>
+            <input
+              type="date"
+              value={due}
+              min={today}
+              onChange={(e) => setDue(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Note (optional)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="What should happen on the follow-up?"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none focus:border-primary/60"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium hover:bg-surface-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave({ agent, due, note: note.trim(), createdAt: new Date() })}
+            className="flex-1 rounded-lg bg-[image:var(--gradient-brand)] py-2.5 text-sm font-medium text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] transition hover:brightness-110"
+          >
+            Assign follow-up
+          </button>
         </div>
       </div>
     </div>
