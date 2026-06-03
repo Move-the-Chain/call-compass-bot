@@ -2286,7 +2286,7 @@ function ChannelCard({ icon: Icon, title, desc, on, onToggle, disabled, footer }
   );
 }
 
-function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void }) {
+function RuleModal({ rule, people, onClose, onSave, saving }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void; saving?: boolean }) {
   const [draft, setDraft] = useState<AlertRule>(rule);
   const [mode, setMode] = useState<"roles" | "people">(rule.recipientIds.length > 0 && rule.recipientRoles.length === 0 ? "people" : "roles");
   const toggleRole = (r: Role) =>
