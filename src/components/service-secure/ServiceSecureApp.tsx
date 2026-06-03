@@ -11,6 +11,12 @@ import {
   deletePerson as deletePersonFn,
 } from "@/lib/access.functions";
 import {
+  listAlertRules as listAlertRulesFn,
+  upsertAlertRule as upsertAlertRuleFn,
+  setAlertRuleEnabled as setAlertRuleEnabledFn,
+  deleteAlertRule as deleteAlertRuleFn,
+} from "@/lib/alert-rules.functions";
+import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
