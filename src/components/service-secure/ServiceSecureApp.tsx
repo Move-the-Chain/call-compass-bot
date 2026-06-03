@@ -1912,41 +1912,66 @@ function IntegrationsView() {
   );
 }
 
-/* ---------------- Admin Center ---------------- */
-function AdminView({
-  people,
-  setPeople,
-}: {
-  people: Person[];
-  setPeople: React.Dispatch<React.SetStateAction<Person[]>>;
-}) {
-  const [editing, setEditing] = useState<Person | null>(null);
-  const blank = (): Person => ({ id: `p${Date.now()}`, name: "", email: "", phone: "", role: "Manager" });
+/* ---------------- Access Management ---------------- */
+type PersonDraft = { id?: string; name: string; email: string; phone: string; role: Role; password?: string };
+
+function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: boolean }) {
+  const [editing, setEditing] = useState<PersonDraft | null>(null);
+  const qc = useQueryClient();
+  const createPerson = useServerFn(createPersonFn);
+  const updatePerson = useServerFn(updatePersonFn);
+  const setPersonRole = useServerFn(setPersonRoleFn);
+  const deletePerson = useServerFn(deletePersonFn);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["access", "people"] });
+
+  const createMut = useMutation({
+    mutationFn: (d: PersonDraft) =>
+      createPerson({ data: { name: d.name, email: d.email, phone: d.phone, password: d.password ?? "", role: d.role } }),
+    onSuccess: () => { refresh(); setEditing(null); },
+  });
+  const updateMut = useMutation({
+    mutationFn: async (d: PersonDraft) => {
+      await updatePerson({ data: { userId: d.id!, name: d.name, phone: d.phone } });
+      await setPersonRole({ data: { userId: d.id!, role: d.role } });
+    },
+    onSuccess: () => { refresh(); setEditing(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deletePerson({ data: { userId: id } }),
+    onSuccess: refresh,
+  });
 
   const counts = ROLES.reduce<Record<string, number>>((acc, r) => {
     acc[r] = people.filter((p) => p.role === r).length;
     return acc;
   }, {});
 
+  const blank: PersonDraft = { name: "", email: "", phone: "", role: "agent", password: "" };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
-          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Admin Center</h1>
-          <p className="mt-2 text-sm text-muted-foreground">People and roles. Recipients here power your alert rules.</p>
+          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Access Management</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Platform users and roles. Everyone here can sign in. {!isAdmin && <span className="text-neg">Only admins can add or edit.</span>}
+          </p>
         </div>
-        <button
-          onClick={() => setEditing(blank())}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
-        >
-          <Plus className="h-4 w-4" /> Add person
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setEditing(blank)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
+          >
+            <Plus className="h-4 w-4" /> Add user
+          </button>
+        )}
       </header>
 
       <div className="flex flex-wrap gap-2">
         {ROLES.map((r) => (
-          <Chip key={r} tone="muted">{r} · {counts[r] ?? 0}</Chip>
+          <Chip key={r} tone="muted">{ROLE_LABEL[r]} · {counts[r] ?? 0}</Chip>
         ))}
       </div>
 
@@ -1959,54 +1984,74 @@ function AdminView({
             <div className="font-medium">{p.name}</div>
             <div className="text-muted-foreground">{p.email}</div>
             <div className="text-muted-foreground">{p.phone || <span className="opacity-50">—</span>}</div>
-            <div><Chip tone="primary">{p.role}</Chip></div>
+            <div><Chip tone="primary">{ROLE_LABEL[p.role]}</Chip></div>
             <div className="flex justify-end gap-1">
-              <button onClick={() => setEditing(p)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => setPeople((ps) => ps.filter((x) => x.id !== p.id))} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
+              {isAdmin && (
+                <>
+                  <button onClick={() => setEditing({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role })} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete ${p.name || p.email}? This removes their account permanently.`)) deleteMut.mutate(p.id);
+                    }}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}
-        {people.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No people yet.</div>}
+        {people.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No users yet.</div>}
       </div>
 
       {editing && (
         <PersonModal
           person={editing}
-          isNew={!people.find((p) => p.id === editing.id)}
+          isNew={!editing.id}
+          busy={createMut.isPending || updateMut.isPending}
+          error={(createMut.error as Error | null)?.message ?? (updateMut.error as Error | null)?.message ?? null}
           onClose={() => setEditing(null)}
-          onSave={(p) => {
-            setPeople((ps) => (ps.find((x) => x.id === p.id) ? ps.map((x) => (x.id === p.id ? p : x)) : [...ps, p]));
-            setEditing(null);
-          }}
+          onSave={(p) => (p.id ? updateMut.mutate(p) : createMut.mutate(p))}
         />
       )}
     </div>
   );
 }
 
-function PersonModal({ person, isNew, onClose, onSave }: { person: Person; isNew: boolean; onClose: () => void; onSave: (p: Person) => void }) {
-  const [draft, setDraft] = useState<Person>(person);
-  const valid = draft.name.trim() && draft.email.trim();
+function PersonModal({ person, isNew, busy, error, onClose, onSave }: { person: PersonDraft; isNew: boolean; busy: boolean; error: string | null; onClose: () => void; onSave: (p: PersonDraft) => void }) {
+  const [draft, setDraft] = useState<PersonDraft>(person);
+  const valid = draft.name.trim() && draft.email.trim() && (!isNew || (draft.password ?? "").length >= 8);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="surface-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <div className="font-display text-xl">{isNew ? "Add person" : "Edit person"}</div>
+          <div className="font-display text-xl">{isNew ? "Add user" : "Edit user"}</div>
           <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-3">
           <Field label="Name"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="modal-input" /></Field>
-          <Field label="Email"><input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input" /></Field>
+          <Field label="Email">
+            <input type="email" value={draft.email} disabled={!isNew} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input disabled:opacity-60" />
+          </Field>
           <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
           <Field label="Role">
             <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
           </Field>
+          {isNew && (
+            <Field label="Temporary password (min 8 chars)">
+              <input type="text" value={draft.password ?? ""} onChange={(e) => setDraft({ ...draft, password: e.target.value })} className="modal-input" placeholder="Share securely with the user" />
+            </Field>
+          )}
         </div>
+        {error && <div className="mt-3 rounded-lg border border-neg/40 bg-neg/10 px-3 py-2 text-xs text-neg">{error}</div>}
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
-          <button disabled={!valid} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-40">Save</button>
+          <button disabled={!valid || busy} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-40">
+            {busy ? "Saving…" : isNew ? "Create user" : "Save"}
+          </button>
         </div>
       </div>
     </div>
