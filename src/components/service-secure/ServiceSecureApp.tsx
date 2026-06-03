@@ -68,7 +68,7 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "explorer", label: "Call Explorer", icon: Search },
   { key: "agents", label: "Agent Scorecards", icon: Headphones },
   { key: "accounts", label: "Account Health", icon: Building2 },
-  { key: "admin", label: "Admin Center", icon: Shield },
+  { key: "admin", label: "Access Management", icon: Shield },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "notifications", label: "Notifications", icon: Bell },
 ];
