@@ -158,6 +158,8 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
+  const listPeople = useServerFn(listPeopleFn);
+  const getMyAccess = useServerFn(getMyAccessFn);
   const peopleQuery = useQuery({
     queryKey: ["access", "people"],
     queryFn: () => listPeople(),
