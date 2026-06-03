@@ -291,18 +291,40 @@ export default function ServiceSecureApp() {
           })}
         </nav>
 
-        <div className="mt-auto rounded-xl border border-border bg-surface-2/60 p-3">
-          <div className="flex items-center gap-2 text-[11px] font-medium text-pos">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-pos" />
-            </span>
-            RingCentral connected
+        <div className="mt-auto space-y-3">
+          <div className="rounded-xl border border-border bg-surface-2/60 p-3">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-pos">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-pos" />
+              </span>
+              RingCentral connected
+            </div>
+            <div className="mt-2 font-mono text-xs text-muted-foreground">
+              <div className="text-foreground">412 calls today</div>
+              <div>{unmatched} unmatched · 8 flagged</div>
+            </div>
           </div>
-          <div className="mt-2 font-mono text-xs text-muted-foreground">
-            <div className="text-foreground">412 calls today</div>
-            <div>{unmatched} unmatched · 8 flagged</div>
-          </div>
+          {meQuery.data?.profile && (
+            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2/60 p-3">
+              <div className="min-w-0">
+                <div className="truncate text-[12.5px] font-medium">{meQuery.data.profile.name || meQuery.data.profile.email}</div>
+                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {meQuery.data.roles.map((r) => ROLE_LABEL[r as Role]).join(" · ") || "No role"}
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate({ to: "/auth" });
+                }}
+                title="Sign out"
+                className="ml-2 rounded-md p-1.5 text-muted-foreground hover:bg-surface hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
