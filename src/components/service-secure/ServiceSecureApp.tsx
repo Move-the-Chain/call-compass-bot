@@ -1091,7 +1091,7 @@ function AgentDetail({
 }
 
 /* ---------------- Accounts ---------------- */
-function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Client) => void }) {
+function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; unmatched: number; onOpen: (c: Client) => void }) {
   return (
     <div className="space-y-6">
       {unmatched > 0 && (
