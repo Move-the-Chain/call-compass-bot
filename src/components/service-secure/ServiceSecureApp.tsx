@@ -1200,9 +1200,9 @@ function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; u
 }
 
 /* ---------------- Account Detail ---------------- */
-function AccountDetail({ cl, onBack, onCall }: { cl: Client; onBack: () => void; onCall: (c: Call) => void }) {
+function AccountDetail({ cl, rangeCalls, onBack, onCall }: { cl: Client; rangeCalls: Call[]; onBack: () => void; onCall: (c: Call) => void }) {
   const [tab, setTab] = useState<"kpis" | "calls" | "contacts">("kpis");
-  const cs = CALLS.filter((c) => c.acct === cl.name);
+  const cs = rangeCalls.filter((c) => c.acct === cl.name);
   const p = cs.filter((c) => c.sent > 0.1).length;
   const n = cs.filter((c) => c.sent < -0.1).length;
   const nu = cs.length - p - n;
