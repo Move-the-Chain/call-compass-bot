@@ -176,11 +176,10 @@ export default function ServiceSecureApp() {
         name: p.name || p.email.split("@")[0],
         email: p.email,
         phone: p.phone,
-        role: (p.roles[0] ?? "agent") as Role,
+        role: p.title as Role,
       })),
     [peopleQuery.data],
   );
-  const isAdmin = meQuery.data?.isAdmin ?? false;
   const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
   const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
