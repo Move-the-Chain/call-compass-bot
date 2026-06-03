@@ -1344,6 +1344,7 @@ function CallDetail({
   followUp,
   onToggleResolved,
   onAssignFollowUp,
+  onAssignAccount,
 }: {
   c: Call;
   onBack: () => void;
@@ -1351,9 +1352,11 @@ function CallDetail({
   followUp?: FollowUp;
   onToggleResolved: () => void;
   onAssignFollowUp: (fu: FollowUp) => void;
+  onAssignAccount: (name: string) => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const [showAcct, setShowAcct] = useState(false);
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   const ag = agentOf(c.agent);
