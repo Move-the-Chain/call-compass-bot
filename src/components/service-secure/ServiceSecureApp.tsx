@@ -2044,7 +2044,7 @@ function PersonModal({ person, isNew, busy, error, onClose, onSave }: { person: 
             <input type="email" value={draft.email} disabled={!isNew} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input disabled:opacity-60" />
           </Field>
           <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
-          <Field label="Role">
+          <Field label="Title">
             <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
               {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
