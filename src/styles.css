@@ -151,6 +151,19 @@
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-elevated);
   }
+  .modal-input {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border-radius: var(--radius-md, 0.5rem);
+    border: 1px solid var(--border);
+    background: var(--surface, transparent);
+    color: var(--foreground);
+    font-size: 13.5px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .modal-input:focus { border-color: var(--primary); }
   .glow-ring { box-shadow: var(--shadow-glow); }
   .text-gradient-brand {
     background-image: var(--gradient-brand);
