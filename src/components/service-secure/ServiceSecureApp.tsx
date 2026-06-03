@@ -2279,7 +2279,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
                     draft.recipientRoles.includes(r) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
                   )}
                 >
-                  {r}
+                  {ROLE_LABEL[r]}
                 </button>
               ))}
             </div>
