@@ -136,9 +136,14 @@ export default function ServiceSecureApp() {
     setScreen("agentDetail");
   };
 
+  const rangeCalls = useMemo(
+    () => filterCalls(range, customStart, customEnd),
+    [range, customStart, customEnd],
+  );
+
   const filtered = useMemo(
     () =>
-      CALLS.filter((c) => {
+      rangeCalls.filter((c) => {
         if (fAgent !== "All" && c.agent !== fAgent) return false;
         if (fAcct !== "All" && c.acct !== fAcct) return false;
         if (fSent === "Negative" && c.sent >= -0.1) return false;
@@ -147,17 +152,17 @@ export default function ServiceSecureApp() {
         if (q && !`${c.acct} ${c.agent} ${c.topic} ${c.summary}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [fAgent, fAcct, fSent, q],
+    [rangeCalls, fAgent, fAcct, fSent, q],
   );
 
-  const total = CALLS.length;
-  const pos = CALLS.filter((c) => c.sent > 0.1).length;
-  const neg = CALLS.filter((c) => c.sent < -0.1).length;
-  const unmatched = CALLS.filter((c) => c.flag === "unmatched").length;
-  const todosNeg = CALLS.filter((c) => c.flag === "at-risk" || c.flag === "negative").sort(
+  const total = rangeCalls.length;
+  const pos = rangeCalls.filter((c) => c.sent > 0.1).length;
+  const neg = rangeCalls.filter((c) => c.sent < -0.1).length;
+  const unmatched = rangeCalls.filter((c) => c.flag === "unmatched").length;
+  const todosNeg = rangeCalls.filter((c) => c.flag === "at-risk" || c.flag === "negative").sort(
     (a, b) => (clientOf(a.acct)?.tier ?? 9) - (clientOf(b.acct)?.tier ?? 9),
   );
-  const todosPos = CALLS.filter((c) => c.flag === "positive");
+  const todosPos = rangeCalls.filter((c) => c.flag === "positive");
 
   const screenLabel = NAV.find((n) => n.key === screen)?.label ?? "";
 
