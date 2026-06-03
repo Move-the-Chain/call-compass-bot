@@ -196,3 +196,58 @@ export function dailyBuckets(calls: Call[], range: string, customStart?: string,
   });
   return out;
 }
+
+/** Bucket calls by hour for a single-day range, by day otherwise. */
+export function volumeBuckets(
+  calls: Call[],
+  range: string,
+  customStart?: string,
+  customEnd?: string,
+) {
+  const { days, start } = rangeBounds(range, customStart, customEnd);
+  const out: { label: string; sub?: string; count: number; pos: number; neg: number; neu: number }[] = [];
+  const tally = (b: (typeof out)[number], c: Call) => {
+    b.count++;
+    if (c.sent > 0.1) b.pos++;
+    else if (c.sent < -0.1) b.neg++;
+    else b.neu++;
+  };
+  if (days <= 1) {
+    // Hourly buckets (24)
+    for (let h = 0; h < 24; h++) {
+      const hr12 = ((h + 11) % 12) + 1;
+      const ampm = h < 12 ? "a" : "p";
+      out.push({ label: `${hr12}${ampm}`, count: 0, pos: 0, neg: 0, neu: 0 });
+    }
+    const s = new Date(start);
+    s.setHours(0, 0, 0, 0);
+    const end = new Date(s.getTime() + 24 * 3600e3);
+    calls.forEach((c) => {
+      if (c.time < s || c.time >= end) return;
+      tally(out[c.time.getHours()], c);
+    });
+    return out;
+  }
+  // Daily buckets
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
+  const dayBuckets: { date: Date; b: (typeof out)[number] }[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(s.getTime() + i * 24 * 3600e3);
+    const b = {
+      label: d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" }),
+      count: 0,
+      pos: 0,
+      neg: 0,
+      neu: 0,
+    };
+    out.push(b);
+    dayBuckets.push({ date: d, b });
+  }
+  const map = new Map(dayBuckets.map((x) => [x.date.toISOString().slice(0, 10), x.b]));
+  calls.forEach((c) => {
+    const b = map.get(c.time.toISOString().slice(0, 10));
+    if (b) tally(b, c);
+  });
+  return out;
+}
