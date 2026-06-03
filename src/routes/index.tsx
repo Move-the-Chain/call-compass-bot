@@ -1,29 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
+import ServiceSecureApp from "@/components/service-secure/ServiceSecureApp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "Service Secure — AI Call Intelligence" },
+      { name: "description", content: "AI that reviews every call and surfaces the moments that need a human." },
+      { property: "og:title", content: "Service Secure — AI Call Intelligence" },
+      { property: "og:description", content: "AI that reviews every call and surfaces the moments that need a human." },
     ],
   }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  return <ServiceSecureApp />;
 }
