@@ -151,6 +151,9 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
+  const [people, setPeople] = useState<Person[]>(DEFAULT_PEOPLE);
+  const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
+  const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
   const toggleResolved = (id: number) =>
     setResolved((prev) => {
