@@ -208,7 +208,7 @@ export default function ServiceSecureApp() {
 
       {/* Main */}
       <main className="min-w-0 flex-1 px-6 py-6 lg:px-10 lg:py-8">
-        {screen !== "detail" && screen !== "accountDetail" && (
+        {screen !== "detail" && screen !== "accountDetail" && screen !== "agentDetail" && (
           <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -216,7 +216,29 @@ export default function ServiceSecureApp() {
               </div>
               <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">{screenLabel}</h1>
             </div>
-            {screen !== "integrations" && screen !== "notifications" && <RangePicker range={range} set={setRange} />}
+            {screen !== "integrations" && screen !== "notifications" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <RangePicker
+                  range={range}
+                  set={setRange}
+                  customStart={customStart}
+                  customEnd={customEnd}
+                  setCustomStart={setCustomStart}
+                  setCustomEnd={setCustomEnd}
+                />
+                <button
+                  onClick={() =>
+                    downloadCSV(
+                      `calls-${range.toLowerCase().replace(/\s+/g, "-")}.csv`,
+                      callsToRows(CALLS),
+                    )
+                  }
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[12.5px] font-medium transition hover:border-border-strong hover:bg-surface-2"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download CSV
+                </button>
+              </div>
+            )}
           </header>
         )}
 
@@ -249,7 +271,15 @@ export default function ServiceSecureApp() {
             onExport={() => downloadCSV("calls.csv", callsToRows(filtered))}
           />
         )}
-        {screen === "agents" && <AgentsView />}
+        {screen === "agents" && <AgentsView onOpen={openAgent} range={range} />}
+        {screen === "agentDetail" && agentSel && (
+          <AgentDetail
+            name={agentSel}
+            range={range}
+            onBack={() => setScreen("agents")}
+            onCall={open}
+          />
+        )}
         {screen === "accounts" && <AccountsView unmatched={unmatched} onOpen={openAcct} />}
         {screen === "accountDetail" && acctSel && (
           <AccountDetail cl={acctSel} onBack={() => setScreen("accounts")} onCall={open} />
