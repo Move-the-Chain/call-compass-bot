@@ -119,13 +119,6 @@ export type AlertRule = {
   enabled: boolean;
 };
 
-const DEFAULT_RULES: AlertRule[] = [
-  { id: "r1", title: "Very negative call", desc: "Sentiment below -0.5", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo"], enabled: true },
-  { id: "r2", title: "Churn signal detected", desc: "Caller mentions leaving / other providers", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo", "manager"], enabled: true },
-  { id: "r3", title: "Tier 1 negative call", desc: "Any negative call from a Key account", channels: { slack: true, email: false, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
-  { id: "r4", title: "Repeat complaint", desc: "Same account, 2nd negative call in 7 days", channels: { slack: true, email: true, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
-  { id: "r5", title: "Positive standout", desc: "Sentiment above 0.7 (for recognition)", channels: { slack: false, email: true, sms: false }, priority: "Low", recipientIds: [], recipientRoles: ["manager"], enabled: false },
-];
 
 function downloadCSV(filename: string, rows: (string | number)[][]) {
   const esc = (v: unknown) => {
