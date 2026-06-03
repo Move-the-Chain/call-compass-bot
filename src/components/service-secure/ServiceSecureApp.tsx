@@ -2287,7 +2287,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
 
           <Field label="Notify specific people">
             <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Admin Center.</div>}
+              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Access Management.</div>}
               {people.map((p) => {
                 const checked = draft.recipientIds.includes(p.id);
                 return (
@@ -2296,7 +2296,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
                       <input type="checkbox" checked={checked} onChange={() => togglePerson(p.id)} className="h-4 w-4 accent-[var(--primary)]" />
                       <div>
                         <div className="text-[13px] font-medium">{p.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{p.role} · {p.phone || "no phone"}</div>
+                        <div className="text-[11px] text-muted-foreground">{ROLE_LABEL[p.role]} · {p.phone || "no phone"}</div>
                       </div>
                     </div>
                     {draft.channels.sms && checked && !p.phone && <Chip tone="neg">No phone</Chip>}
