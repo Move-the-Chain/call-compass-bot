@@ -9,11 +9,18 @@ import {
   Download,
   Headphones,
   LayoutGrid,
+  Mail,
+  MessageSquare,
   Pause,
+  Pencil,
+  Phone,
   Play,
   Plug,
+  Plus,
   Search,
+  Shield,
   Sparkles,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -52,6 +59,7 @@ type Screen =
   | "accounts"
   | "accountDetail"
   | "detail"
+  | "admin"
   | "integrations"
   | "notifications";
 
@@ -60,8 +68,39 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "explorer", label: "Call Explorer", icon: Search },
   { key: "agents", label: "Agent Scorecards", icon: Headphones },
   { key: "accounts", label: "Account Health", icon: Building2 },
+  { key: "admin", label: "Admin Center", icon: Shield },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "notifications", label: "Notifications", icon: Bell },
+];
+
+export type Role = "Admin" | "COO" | "Manager" | "Agent" | "Other";
+export const ROLES: Role[] = ["Admin", "COO", "Manager", "Agent", "Other"];
+export type Person = { id: string; name: string; email: string; phone: string; role: Role };
+export type Priority = "Low" | "Medium" | "High" | "Urgent";
+export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
+export type AlertRule = {
+  id: string;
+  title: string;
+  desc: string;
+  channels: { slack: boolean; email: boolean; sms: boolean };
+  priority: Priority;
+  recipientIds: string[];
+  recipientRoles: Role[];
+  enabled: boolean;
+};
+
+const DEFAULT_PEOPLE: Person[] = [
+  { id: "p1", name: "Jordan Reyes", email: "jordan@servicesecure.io", role: "COO", phone: "+1 415 555 0142" },
+  { id: "p2", name: "Sam Mitchell", email: "sam@servicesecure.io", role: "Admin", phone: "+1 415 555 0188" },
+  { id: "p3", name: "Priya Shah", email: "priya@servicesecure.io", role: "Manager", phone: "+1 628 555 0117" },
+  { id: "p4", name: "Marco Bianchi", email: "marco@servicesecure.io", role: "Manager", phone: "" },
+];
+const DEFAULT_RULES: AlertRule[] = [
+  { id: "r1", title: "Very negative call", desc: "Sentiment below -0.5", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: ["p1", "p2"], recipientRoles: ["COO"], enabled: true },
+  { id: "r2", title: "Churn signal detected", desc: "Caller mentions leaving / other providers", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: ["p1"], recipientRoles: ["COO", "Manager"], enabled: true },
+  { id: "r3", title: "Tier 1 negative call", desc: "Any negative call from a Key account", channels: { slack: true, email: false, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["Manager"], enabled: true },
+  { id: "r4", title: "Repeat complaint", desc: "Same account, 2nd negative call in 7 days", channels: { slack: true, email: true, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["Manager"], enabled: true },
+  { id: "r5", title: "Positive standout", desc: "Sentiment above 0.7 (for recognition)", channels: { slack: false, email: true, sms: false }, priority: "Low", recipientIds: [], recipientRoles: ["Manager"], enabled: false },
 ];
 
 function downloadCSV(filename: string, rows: (string | number)[][]) {
@@ -112,6 +151,9 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
+  const [people, setPeople] = useState<Person[]>(DEFAULT_PEOPLE);
+  const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
+  const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
   const toggleResolved = (id: number) =>
     setResolved((prev) => {
@@ -246,7 +288,7 @@ export default function ServiceSecureApp() {
               </div>
               <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">{screenLabel}</h1>
             </div>
-            {screen !== "integrations" && screen !== "notifications" && (
+            {screen !== "integrations" && screen !== "notifications" && screen !== "admin" && (
               <div className="flex flex-wrap items-center gap-2">
                 <RangePicker
                   range={range}
@@ -340,8 +382,18 @@ export default function ServiceSecureApp() {
             onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
+        {screen === "admin" && <AdminView people={people} setPeople={setPeople} />}
         {screen === "integrations" && <IntegrationsView />}
-        {screen === "notifications" && <NotificationsView />}
+        {screen === "notifications" && (
+          <NotificationsView
+            people={people}
+            rules={rules}
+            setRules={setRules}
+            channels={channels}
+            setChannels={setChannels}
+            onGoAdmin={() => setScreen("admin")}
+          />
+        )}
       </main>
     </div>
   );
@@ -1813,117 +1865,386 @@ function Row({ k, v }: { k: string; v: string }) {
 
 /* ---------------- Integrations ---------------- */
 function IntegrationsView() {
-  const items = [
-    { n: "RingCentral", d: "Call recordings, caller ID, agent extensions", on: true },
-    { n: "Salesforce", d: "Sync client roster, contacts + account tiers", on: false },
-    { n: "HubSpot", d: "Sync client roster + contact numbers", on: false },
-  ];
   return (
     <div>
       <p className="-mt-3 mb-6 text-sm text-muted-foreground">Data sources that feed calls and account info into Service Secure.</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((i) => (
-          <div key={i.n} className="surface-card p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-[15px] font-semibold">{i.n}</div>
-              <Chip tone={i.on ? "pos" : "muted"}>{i.on ? "Connected" : "Not connected"}</Chip>
-            </div>
-            <div className="mb-4 min-h-10 text-[13px] text-muted-foreground">{i.d}</div>
-            <button
-              className={cn(
-                "w-full rounded-lg py-2 text-[13px] font-medium transition",
-                i.on
-                  ? "border border-border bg-transparent text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                  : "bg-[image:var(--gradient-brand)] text-primary-foreground hover:brightness-110",
-              )}
-            >
-              {i.on ? "Manage" : "Connect"}
-            </button>
+        <div className="surface-card p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[15px] font-semibold">RingCentral</div>
+            <Chip tone="pos">Connected</Chip>
           </div>
-        ))}
+          <div className="mb-4 min-h-10 text-[13px] text-muted-foreground">Call recordings, caller ID, agent extensions</div>
+          <button className="w-full rounded-lg border border-border bg-transparent py-2 text-[13px] font-medium text-muted-foreground transition hover:bg-surface-2 hover:text-foreground">
+            Manage
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+/* ---------------- Admin Center ---------------- */
+function AdminView({
+  people,
+  setPeople,
+}: {
+  people: Person[];
+  setPeople: React.Dispatch<React.SetStateAction<Person[]>>;
+}) {
+  const [editing, setEditing] = useState<Person | null>(null);
+  const blank = (): Person => ({ id: `p${Date.now()}`, name: "", email: "", phone: "", role: "Manager" });
+
+  const counts = ROLES.reduce<Record<string, number>>((acc, r) => {
+    acc[r] = people.filter((p) => p.role === r).length;
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
+          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Admin Center</h1>
+          <p className="mt-2 text-sm text-muted-foreground">People and roles. Recipients here power your alert rules.</p>
+        </div>
+        <button
+          onClick={() => setEditing(blank())}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
+        >
+          <Plus className="h-4 w-4" /> Add person
+        </button>
+      </header>
+
+      <div className="flex flex-wrap gap-2">
+        {ROLES.map((r) => (
+          <Chip key={r} tone="muted">{r} · {counts[r] ?? 0}</Chip>
+        ))}
+      </div>
+
+      <div className="surface-card overflow-hidden p-0">
+        <div className="grid grid-cols-[1.4fr_1.6fr_1.3fr_0.9fr_auto] gap-4 border-b border-border px-5 py-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          <div>Name</div><div>Email</div><div>Phone</div><div>Role</div><div></div>
+        </div>
+        {people.map((p) => (
+          <div key={p.id} className="grid grid-cols-[1.4fr_1.6fr_1.3fr_0.9fr_auto] items-center gap-4 border-b border-border px-5 py-3 text-[13.5px] last:border-b-0">
+            <div className="font-medium">{p.name}</div>
+            <div className="text-muted-foreground">{p.email}</div>
+            <div className="text-muted-foreground">{p.phone || <span className="opacity-50">—</span>}</div>
+            <div><Chip tone="primary">{p.role}</Chip></div>
+            <div className="flex justify-end gap-1">
+              <button onClick={() => setEditing(p)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => setPeople((ps) => ps.filter((x) => x.id !== p.id))} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+        ))}
+        {people.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No people yet.</div>}
+      </div>
+
+      {editing && (
+        <PersonModal
+          person={editing}
+          isNew={!people.find((p) => p.id === editing.id)}
+          onClose={() => setEditing(null)}
+          onSave={(p) => {
+            setPeople((ps) => (ps.find((x) => x.id === p.id) ? ps.map((x) => (x.id === p.id ? p : x)) : [...ps, p]));
+            setEditing(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PersonModal({ person, isNew, onClose, onSave }: { person: Person; isNew: boolean; onClose: () => void; onSave: (p: Person) => void }) {
+  const [draft, setDraft] = useState<Person>(person);
+  const valid = draft.name.trim() && draft.email.trim();
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <div className="surface-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="font-display text-xl">{isNew ? "Add person" : "Edit person"}</div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <Field label="Name"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="modal-input" /></Field>
+          <Field label="Email"><input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input" /></Field>
+          <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
+          <Field label="Role">
+            <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
+          <button disabled={!valid} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-40">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      {children}
+    </label>
+  );
+}
+
 /* ---------------- Notifications ---------------- */
-function NotificationsView() {
-  const channels = [
-    { n: "Slack", d: "Real-time alerts to #ops channel", on: true },
-    { n: "Email digest", d: "Daily summary to chosen recipients", on: true },
-    { n: "SMS (Twilio)", d: "Text the COO on at-risk calls only", on: false },
-  ];
-  const rules = [
-    { t: "Very negative call", d: "Sentiment below -0.5", ch: "Slack + SMS", on: true },
-    { t: "Churn signal detected", d: "Caller mentions leaving / other providers", ch: "Slack + SMS", on: true },
-    { t: "Tier 1 negative call", d: "Any negative call from a Key account", ch: "Slack", on: true },
-    { t: "Repeat complaint", d: "Same account, 2nd negative call in 7 days", ch: "Slack", on: true },
-    { t: "Positive standout", d: "Sentiment above 0.7 (for recognition)", ch: "Daily digest", on: false },
-  ];
+function NotificationsView({
+  people,
+  rules,
+  setRules,
+  channels,
+  setChannels,
+  onGoAdmin,
+}: {
+  people: Person[];
+  rules: AlertRule[];
+  setRules: React.Dispatch<React.SetStateAction<AlertRule[]>>;
+  channels: { slack: boolean; email: boolean; sms: boolean };
+  setChannels: React.Dispatch<React.SetStateAction<{ slack: boolean; email: boolean; sms: boolean }>>;
+  onGoAdmin: () => void;
+}) {
+  const [editing, setEditing] = useState<AlertRule | null>(null);
+  const peopleById = useMemo(() => Object.fromEntries(people.map((p) => [p.id, p])), [people]);
+  const smsReady = people.some((p) => p.phone.trim().length > 0);
+
+  const priorityTone = (p: Priority) => (p === "Urgent" ? "neg" : p === "High" ? "primary" : p === "Medium" ? "neu" : "muted");
+
   return (
     <div className="space-y-8">
-      <p className="-mt-3 text-sm text-muted-foreground">Where alerts go, and what triggers them. Channels are separate from data sources.</p>
+      <header>
+        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
+        <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Notifications</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Admin Center</button>.</p>
+      </header>
 
       <section>
         <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Channels</div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {channels.map((i) => (
-            <div key={i.n} className="surface-card p-5">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-[15px] font-semibold">{i.n}</div>
-                <Chip tone={i.on ? "pos" : "muted"}>{i.on ? "On" : "Off"}</Chip>
-              </div>
-              <div className="mb-4 min-h-10 text-[13px] text-muted-foreground">{i.d}</div>
-              <button
-                className={cn(
-                  "w-full rounded-lg py-2 text-[13px] font-medium transition",
-                  i.on
-                    ? "border border-border bg-transparent text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                    : "bg-[image:var(--gradient-brand)] text-primary-foreground hover:brightness-110",
-                )}
-              >
-                {i.on ? "Configure" : "Turn on"}
-              </button>
-            </div>
-          ))}
+          <ChannelCard icon={MessageSquare} title="Slack" desc="Real-time alerts to #ops channel" on={channels.slack} onToggle={() => setChannels((c) => ({ ...c, slack: !c.slack }))} />
+          <ChannelCard icon={Mail} title="Email" desc="Sent to recipients on each rule" on={channels.email} onToggle={() => setChannels((c) => ({ ...c, email: !c.email }))} />
+          <ChannelCard
+            icon={Phone}
+            title="SMS (Twilio)"
+            desc={smsReady ? "Texts the phone numbers in Admin Center" : "Add phone numbers in Admin Center first"}
+            on={channels.sms}
+            disabled={!smsReady}
+            onToggle={() => smsReady && setChannels((c) => ({ ...c, sms: !c.sms }))}
+            footer={!smsReady ? <button onClick={onGoAdmin} className="text-xs font-medium text-primary hover:underline">Go to Admin Center →</button> : null}
+          />
         </div>
       </section>
 
       <section>
-        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Alert rules</div>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Alert rules</div>
+          <button
+            onClick={() =>
+              setEditing({
+                id: `r${Date.now()}`,
+                title: "New rule",
+                desc: "",
+                channels: { slack: true, email: false, sms: false },
+                priority: "Medium",
+                recipientIds: [],
+                recipientRoles: [],
+                enabled: true,
+              })
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-surface-2"
+          >
+            <Plus className="h-3.5 w-3.5" /> New rule
+          </button>
+        </div>
+
         <div className="surface-card overflow-hidden p-0">
-          {rules.map((r, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex items-center justify-between gap-4 px-5 py-4",
-                i ? "border-t border-border" : "",
-              )}
-            >
-              <div>
-                <div className="text-[13.5px] font-medium">{r.t}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{r.d}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Chip tone="primary">{r.ch}</Chip>
-                <div
-                  className={cn(
-                    "relative h-[22px] w-[40px] rounded-full transition",
-                    r.on ? "bg-pos shadow-[0_0_12px_oklch(0.72_0.16_152/0.5)]" : "bg-border-strong",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white transition-all",
-                      r.on ? "left-[20px]" : "left-[2px]",
-                    )}
-                  />
+          {rules.map((r, i) => {
+            const chs = [r.channels.slack && "Slack", r.channels.email && "Email", r.channels.sms && "SMS"].filter(Boolean).join(" + ") || "No channel";
+            const recipientCount = r.recipientIds.length + people.filter((p) => r.recipientRoles.includes(p.role)).filter((p) => !r.recipientIds.includes(p.id)).length;
+            return (
+              <div key={r.id} className={cn("flex flex-wrap items-center justify-between gap-4 px-5 py-4", i ? "border-t border-border" : "")}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="text-[13.5px] font-medium">{r.title}</div>
+                    <Chip tone={priorityTone(r.priority) as "neg" | "primary" | "neu" | "muted"}>{r.priority}</Chip>
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{r.desc || "—"}</div>
+                  <div className="mt-1.5 text-[11px] text-muted-foreground">
+                    {chs} · {recipientCount} recipient{recipientCount === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setEditing(r)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setRules((rs) => rs.filter((x) => x.id !== r.id))} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button
+                    onClick={() => setRules((rs) => rs.map((x) => (x.id === r.id ? { ...x, enabled: !x.enabled } : x)))}
+                    aria-label="Toggle rule"
+                    className={cn("relative h-[22px] w-[40px] rounded-full transition", r.enabled ? "bg-pos shadow-[0_0_12px_oklch(0.72_0.16_152/0.5)]" : "bg-border-strong")}
+                  >
+                    <div className={cn("absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white transition-all", r.enabled ? "left-[20px]" : "left-[2px]")} />
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+          {rules.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No rules yet.</div>}
         </div>
       </section>
+
+      {editing && (
+        <RuleModal
+          rule={editing}
+          people={people}
+          onClose={() => setEditing(null)}
+          onSave={(r) => {
+            setRules((rs) => (rs.find((x) => x.id === r.id) ? rs.map((x) => (x.id === r.id ? r : x)) : [...rs, r]));
+            setEditing(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ChannelCard({ icon: Icon, title, desc, on, onToggle, disabled, footer }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; on: boolean; onToggle: () => void; disabled?: boolean; footer?: React.ReactNode }) {
+  return (
+    <div className={cn("surface-card p-5", disabled && "opacity-70")}>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <div className="text-[15px] font-semibold">{title}</div>
+        </div>
+        <Chip tone={on ? "pos" : "muted"}>{on ? "On" : "Off"}</Chip>
+      </div>
+      <div className="mb-4 min-h-10 text-[13px] text-muted-foreground">{desc}</div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onToggle}
+          disabled={disabled}
+          className={cn(
+            "relative h-[22px] w-[40px] rounded-full transition disabled:cursor-not-allowed disabled:opacity-50",
+            on ? "bg-pos" : "bg-border-strong",
+          )}
+        >
+          <div className={cn("absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white transition-all", on ? "left-[20px]" : "left-[2px]")} />
+        </button>
+        {footer}
+      </div>
+    </div>
+  );
+}
+
+function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void }) {
+  const [draft, setDraft] = useState<AlertRule>(rule);
+  const toggleRole = (r: Role) =>
+    setDraft((d) => ({ ...d, recipientRoles: d.recipientRoles.includes(r) ? d.recipientRoles.filter((x) => x !== r) : [...d.recipientRoles, r] }));
+  const togglePerson = (id: string) =>
+    setDraft((d) => ({ ...d, recipientIds: d.recipientIds.includes(id) ? d.recipientIds.filter((x) => x !== id) : [...d.recipientIds, id] }));
+
+  const smsMissingPhones = draft.channels.sms && draft.recipientIds.some((id) => !people.find((p) => p.id === id)?.phone);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <div className="surface-card w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="font-display text-xl">Alert rule</div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <Field label="Title"><input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} className="modal-input" /></Field>
+          <Field label="Trigger"><input value={draft.desc} onChange={(e) => setDraft({ ...draft, desc: e.target.value })} placeholder="e.g. Sentiment below -0.5" className="modal-input" /></Field>
+
+          <Field label="Priority">
+            <div className="flex flex-wrap gap-2">
+              {PRIORITIES.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setDraft({ ...draft, priority: p })}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
+                    draft.priority === p ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Channels">
+            <div className="flex flex-wrap gap-2">
+              {(["slack", "email", "sms"] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setDraft({ ...draft, channels: { ...draft.channels, [c]: !draft.channels[c] } })}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium capitalize transition",
+                    draft.channels[c] ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                  )}
+                >
+                  {c === "sms" ? "SMS" : c.charAt(0).toUpperCase() + c.slice(1)}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Notify roles">
+            <div className="flex flex-wrap gap-2">
+              {ROLES.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => toggleRole(r)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
+                    draft.recipientRoles.includes(r) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Notify specific people">
+            <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Admin Center.</div>}
+              {people.map((p) => {
+                const checked = draft.recipientIds.includes(p.id);
+                return (
+                  <label key={p.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-2">
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={checked} onChange={() => togglePerson(p.id)} className="h-4 w-4 accent-[var(--primary)]" />
+                      <div>
+                        <div className="text-[13px] font-medium">{p.name}</div>
+                        <div className="text-[11px] text-muted-foreground">{p.role} · {p.phone || "no phone"}</div>
+                      </div>
+                    </div>
+                    {draft.channels.sms && checked && !p.phone && <Chip tone="neg">No phone</Chip>}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+
+          {smsMissingPhones && (
+            <div className="rounded-lg border border-neg/40 bg-neg/10 px-3 py-2 text-xs text-neg">
+              Some selected recipients have no phone number — they won't receive SMS.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
+          <button onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110">Save rule</button>
+        </div>
+      </div>
     </div>
   );
 }
