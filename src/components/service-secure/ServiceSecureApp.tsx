@@ -261,11 +261,14 @@ export default function ServiceSecureApp() {
 
         {screen === "summary" && (
           <SummaryView
+            rangeCalls={rangeCalls}
             total={total}
             pos={pos}
             neg={neg}
             unmatched={unmatched}
             range={range}
+            customStart={customStart}
+            customEnd={customEnd}
             todosNeg={todosNeg}
             todosPos={todosPos}
             resolved={resolved}
@@ -288,18 +291,31 @@ export default function ServiceSecureApp() {
             onExport={() => downloadCSV("calls.csv", callsToRows(filtered))}
           />
         )}
-        {screen === "agents" && <AgentsView onOpen={openAgent} range={range} />}
+        {screen === "agents" && (
+          <AgentsView
+            rangeCalls={rangeCalls}
+            range={range}
+            customStart={customStart}
+            customEnd={customEnd}
+            onOpen={openAgent}
+          />
+        )}
         {screen === "agentDetail" && agentSel && (
           <AgentDetail
             name={agentSel}
+            rangeCalls={rangeCalls}
             range={range}
+            customStart={customStart}
+            customEnd={customEnd}
             onBack={() => setScreen("agents")}
             onCall={open}
           />
         )}
-        {screen === "accounts" && <AccountsView unmatched={unmatched} onOpen={openAcct} />}
+        {screen === "accounts" && (
+          <AccountsView rangeCalls={rangeCalls} unmatched={unmatched} onOpen={openAcct} />
+        )}
         {screen === "accountDetail" && acctSel && (
-          <AccountDetail cl={acctSel} onBack={() => setScreen("accounts")} onCall={open} />
+          <AccountDetail cl={acctSel} rangeCalls={rangeCalls} onBack={() => setScreen("accounts")} onCall={open} />
         )}
         {screen === "detail" && sel && (
           <CallDetail
