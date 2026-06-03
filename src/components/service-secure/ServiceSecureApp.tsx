@@ -2056,9 +2056,16 @@ function PersonModal({ person, isNew, busy, error, onClose, onSave }: { person: 
           </Field>
           <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
           <Field label="Title">
-            <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
-              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
+            <input
+              list="title-suggestions"
+              value={draft.role}
+              onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+              placeholder="e.g. COO, Manager, Head of Sales"
+              className="modal-input"
+            />
+            <datalist id="title-suggestions">
+              {TITLE_SUGGESTIONS.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </Field>
           {isNew && (
             <Field label="Temporary password (min 8 chars)">
