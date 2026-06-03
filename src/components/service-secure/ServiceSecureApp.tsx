@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Check,
   Download,
   Headphones,
   LayoutGrid,
@@ -13,7 +14,9 @@ import {
   Plug,
   Search,
   Sparkles,
+  UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import {
   AGENTS,
