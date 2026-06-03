@@ -382,8 +382,18 @@ export default function ServiceSecureApp() {
             onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
+        {screen === "admin" && <AdminView people={people} setPeople={setPeople} />}
         {screen === "integrations" && <IntegrationsView />}
-        {screen === "notifications" && <NotificationsView />}
+        {screen === "notifications" && (
+          <NotificationsView
+            people={people}
+            rules={rules}
+            setRules={setRules}
+            channels={channels}
+            setChannels={setChannels}
+            onGoAdmin={() => setScreen("admin")}
+          />
+        )}
       </main>
     </div>
   );
