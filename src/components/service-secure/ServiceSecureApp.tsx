@@ -1937,26 +1937,23 @@ function IntegrationsView() {
 /* ---------------- Access Management ---------------- */
 type PersonDraft = { id?: string; name: string; email: string; phone: string; role: Role; password?: string };
 
-function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: boolean }) {
+function AccessManagementView({ people }: { people: Person[] }) {
   const [editing, setEditing] = useState<PersonDraft | null>(null);
   const qc = useQueryClient();
   const createPerson = useServerFn(createPersonFn);
   const updatePerson = useServerFn(updatePersonFn);
-  const setPersonRole = useServerFn(setPersonRoleFn);
   const deletePerson = useServerFn(deletePersonFn);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["access", "people"] });
 
   const createMut = useMutation({
     mutationFn: (d: PersonDraft) =>
-      createPerson({ data: { name: d.name, email: d.email, phone: d.phone, password: d.password ?? "", role: d.role } }),
+      createPerson({ data: { name: d.name, email: d.email, phone: d.phone, password: d.password ?? "", title: d.role } }),
     onSuccess: () => { refresh(); setEditing(null); },
   });
   const updateMut = useMutation({
-    mutationFn: async (d: PersonDraft) => {
-      await updatePerson({ data: { userId: d.id!, name: d.name, phone: d.phone } });
-      await setPersonRole({ data: { userId: d.id!, role: d.role } });
-    },
+    mutationFn: (d: PersonDraft) =>
+      updatePerson({ data: { userId: d.id!, name: d.name, phone: d.phone, title: d.role } }),
     onSuccess: () => { refresh(); setEditing(null); },
   });
   const deleteMut = useMutation({
@@ -1973,23 +1970,17 @@ function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: 
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
-          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Access Management</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Platform users and roles. Everyone here can sign in. {!isAdmin && <span className="text-neg">Only admins can add or edit.</span>}
-          </p>
-        </div>
-        {isAdmin && (
-          <button
-            onClick={() => setEditing(blank)}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
-          >
-            <Plus className="h-4 w-4" /> Add user
-          </button>
-        )}
-      </header>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Agent, Contact) is how notifications and routing decide who to ping.
+        </p>
+        <button
+          onClick={() => setEditing(blank)}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
+        >
+          <Plus className="h-4 w-4" /> Add user
+        </button>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {ROLES.map((r) => (
@@ -1999,7 +1990,7 @@ function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: 
 
       <div className="surface-card overflow-hidden p-0">
         <div className="grid grid-cols-[1.4fr_1.6fr_1.3fr_0.9fr_auto] gap-4 border-b border-border px-5 py-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-          <div>Name</div><div>Email</div><div>Phone</div><div>Role</div><div></div>
+          <div>Name</div><div>Email</div><div>Phone</div><div>Title</div><div></div>
         </div>
         {people.map((p) => (
           <div key={p.id} className="grid grid-cols-[1.4fr_1.6fr_1.3fr_0.9fr_auto] items-center gap-4 border-b border-border px-5 py-3 text-[13.5px] last:border-b-0">
@@ -2008,19 +1999,15 @@ function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: 
             <div className="text-muted-foreground">{p.phone || <span className="opacity-50">—</span>}</div>
             <div><Chip tone="primary">{ROLE_LABEL[p.role]}</Chip></div>
             <div className="flex justify-end gap-1">
-              {isAdmin && (
-                <>
-                  <button onClick={() => setEditing({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role })} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete ${p.name || p.email}? This removes their account permanently.`)) deleteMut.mutate(p.id);
-                    }}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              )}
+              <button onClick={() => setEditing({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role })} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+              <button
+                onClick={() => {
+                  if (confirm(`Delete ${p.name || p.email}? This removes their account permanently.`)) deleteMut.mutate(p.id);
+                }}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
         ))}
