@@ -392,22 +392,28 @@ function RangePicker({
 
 /* ---------------- Summary ---------------- */
 function SummaryView({
+  rangeCalls,
   total,
   pos,
   neg,
   unmatched,
   range,
+  customStart,
+  customEnd,
   todosNeg,
   todosPos,
   resolved,
   followUps,
   onOpen,
 }: {
+  rangeCalls: Call[];
   total: number;
   pos: number;
   neg: number;
   unmatched: number;
   range: string;
+  customStart: string;
+  customEnd: string;
   todosNeg: Call[];
   todosPos: Call[];
   resolved: Set<number>;
@@ -416,13 +422,14 @@ function SummaryView({
 }) {
   const [tab, setTab] = useState<"review" | "sentiment">("review");
   const openReview = todosNeg.filter((c) => !resolved.has(c.id));
+  const safePct = (n: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
 
   return (
     <div className="space-y-7">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Total calls" value={total} sub={range} />
-        <Kpi label="Positive" value={`${Math.round((pos / total) * 100)}%`} sub={`${pos} calls`} tone="pos" />
-        <Kpi label="Negative" value={`${Math.round((neg / total) * 100)}%`} sub={`${neg} calls`} tone="neg" accent />
+        <Kpi label="Positive" value={safePct(pos)} sub={`${pos} calls`} tone="pos" />
+        <Kpi label="Negative" value={safePct(neg)} sub={`${neg} calls`} tone="neg" accent={neg > 0} />
         <Kpi label="Unmatched" value={unmatched} sub="need linking" tone="neu" />
       </div>
 
@@ -467,7 +474,9 @@ function SummaryView({
           onOpen={onOpen}
         />
       )}
-      {tab === "sentiment" && <SentimentTab />}
+      {tab === "sentiment" && (
+        <SentimentTab rangeCalls={rangeCalls} range={range} customStart={customStart} customEnd={customEnd} />
+      )}
     </div>
   );
 }
