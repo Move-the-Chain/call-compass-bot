@@ -90,7 +90,10 @@ export default function ServiceSecureApp() {
   const [screen, setScreen] = useState<Screen>("summary");
   const [sel, setSel] = useState<Call | null>(null);
   const [acctSel, setAcctSel] = useState<Client | null>(null);
+  const [agentSel, setAgentSel] = useState<string | null>(null);
   const [range, setRange] = useState("Today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [fAgent, setFAgent] = useState("All");
   const [fAcct, setFAcct] = useState("All");
   const [fSent, setFSent] = useState("All");
