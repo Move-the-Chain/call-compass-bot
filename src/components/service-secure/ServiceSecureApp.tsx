@@ -1972,18 +1972,19 @@ function AccessManagementView({ people }: { people: Person[] }) {
     onSuccess: refresh,
   });
 
-  const counts = ROLES.reduce<Record<string, number>>((acc, r) => {
-    acc[r] = people.filter((p) => p.role === r).length;
+  const titleCounts = people.reduce<Record<string, number>>((acc, p) => {
+    const key = (p.role || "Untitled").trim() || "Untitled";
+    acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 
-  const blank: PersonDraft = { name: "", email: "", phone: "", role: "agent", password: "" };
+  const blank: PersonDraft = { name: "", email: "", phone: "", role: "", password: "" };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Agent, Contact) is how notifications and routing decide who to ping.
+          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Head of Sales, etc.) is how notifications and routing decide who to ping.
         </p>
         <button
           onClick={() => setEditing(blank)}
@@ -1994,8 +1995,8 @@ function AccessManagementView({ people }: { people: Person[] }) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {ROLES.map((r) => (
-          <Chip key={r} tone="muted">{ROLE_LABEL[r]} · {counts[r] ?? 0}</Chip>
+        {Object.entries(titleCounts).map(([r, n]) => (
+          <Chip key={r} tone="muted">{roleLabel(r)} · {n}</Chip>
         ))}
       </div>
 
