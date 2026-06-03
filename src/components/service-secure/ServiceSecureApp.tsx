@@ -246,7 +246,16 @@ export default function ServiceSecureApp() {
         {screen === "accountDetail" && acctSel && (
           <AccountDetail cl={acctSel} onBack={() => setScreen("accounts")} onCall={open} />
         )}
-        {screen === "detail" && sel && <CallDetail c={sel} onBack={() => setScreen("explorer")} />}
+        {screen === "detail" && sel && (
+          <CallDetail
+            c={sel}
+            onBack={() => setScreen("explorer")}
+            resolved={resolved.has(sel.id)}
+            followUp={followUps[sel.id]}
+            onToggleResolved={() => toggleResolved(sel.id)}
+            onAssignFollowUp={(fu) => assignFollowUp(sel.id, fu)}
+          />
+        )}
         {screen === "integrations" && <IntegrationsView />}
         {screen === "notifications" && <NotificationsView />}
       </main>
