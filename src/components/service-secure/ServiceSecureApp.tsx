@@ -2240,10 +2240,15 @@ function ChannelCard({ icon: Icon, title, desc, on, onToggle, disabled, footer }
 
 function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void }) {
   const [draft, setDraft] = useState<AlertRule>(rule);
+  const [mode, setMode] = useState<"roles" | "people">(rule.recipientIds.length > 0 && rule.recipientRoles.length === 0 ? "people" : "roles");
   const toggleRole = (r: Role) =>
     setDraft((d) => ({ ...d, recipientRoles: d.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? d.recipientRoles.filter((x) => x.toLowerCase() !== r.toLowerCase()) : [...d.recipientRoles, r] }));
   const togglePerson = (id: string) =>
     setDraft((d) => ({ ...d, recipientIds: d.recipientIds.includes(id) ? d.recipientIds.filter((x) => x !== id) : [...d.recipientIds, id] }));
+  const switchMode = (m: "roles" | "people") => {
+    setMode(m);
+    setDraft((d) => m === "roles" ? { ...d, recipientIds: [] } : { ...d, recipientRoles: [] });
+  };
 
   const smsMissingPhones = draft.channels.sms && draft.recipientIds.some((id) => !people.find((p) => p.id === id)?.phone);
 
