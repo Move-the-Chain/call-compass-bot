@@ -190,7 +190,6 @@ export default function ServiceSecureApp() {
       })),
     [peopleQuery.data],
   );
-  const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
   const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
   const toggleResolved = (id: number) =>
