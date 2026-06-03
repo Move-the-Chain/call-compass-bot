@@ -2408,7 +2408,7 @@ function RuleModal({ rule, people, onClose, onSave, saving }: { rule: AlertRule;
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
-          <button onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110">Save rule</button>
+          <button disabled={saving} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-60">{saving ? "Saving…" : "Save rule"}</button>
         </div>
       </div>
     </div>
