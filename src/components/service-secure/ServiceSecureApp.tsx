@@ -745,7 +745,6 @@ function ExplorerView({
   fAcct,
   setFAcct,
   onOpen,
-  onExport,
 }: {
   filtered: Call[];
   q: string;
@@ -757,7 +756,6 @@ function ExplorerView({
   fAcct: string;
   setFAcct: (v: string) => void;
   onOpen: (c: Call) => void;
-  onExport: () => void;
 }) {
   return (
     <div>
@@ -774,12 +772,6 @@ function ExplorerView({
         <Sel v={fSent} set={setFSent} opts={["All", "Negative", "Neutral", "Positive"]} label="Sentiment" />
         <Sel v={fAgent} set={setFAgent} opts={["All", ...AGENTS.map((a) => a.name)]} label="Agent" />
         <Sel v={fAcct} set={setFAcct} opts={["All", ...CLIENTS.map((c) => c.name)]} label="Account" />
-        <button
-          onClick={onExport}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[12.5px] font-medium transition hover:border-border-strong hover:bg-surface-2"
-        >
-          <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
       </div>
 
       <div className="surface-card overflow-hidden p-0">
