@@ -119,6 +119,10 @@ export default function ServiceSecureApp() {
     setAcctSel(cl);
     setScreen("accountDetail");
   };
+  const openAgent = (name: string) => {
+    setAgentSel(name);
+    setScreen("agentDetail");
+  };
 
   const filtered = useMemo(
     () =>
