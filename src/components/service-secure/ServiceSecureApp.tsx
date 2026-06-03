@@ -286,7 +286,6 @@ export default function ServiceSecureApp() {
             fAcct={fAcct}
             setFAcct={setFAcct}
             onOpen={open}
-            onExport={() => downloadCSV("calls.csv", callsToRows(filtered))}
           />
         )}
         {screen === "agents" && (
