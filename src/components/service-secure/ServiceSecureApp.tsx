@@ -83,6 +83,8 @@ function callsToRows(calls: Call[]): (string | number)[][] {
   return [head, ...body];
 }
 
+export type FollowUp = { agent: string; due: string; note: string; createdAt: Date };
+
 export default function ServiceSecureApp() {
   const [screen, setScreen] = useState<Screen>("summary");
   const [sel, setSel] = useState<Call | null>(null);
@@ -92,6 +94,18 @@ export default function ServiceSecureApp() {
   const [fAcct, setFAcct] = useState("All");
   const [fSent, setFSent] = useState("All");
   const [q, setQ] = useState("");
+  const [resolved, setResolved] = useState<Set<number>>(new Set());
+  const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
+
+  const toggleResolved = (id: number) =>
+    setResolved((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const assignFollowUp = (id: number, fu: FollowUp) =>
+    setFollowUps((prev) => ({ ...prev, [id]: fu }));
 
   const open = (c: Call) => {
     setSel(c);
