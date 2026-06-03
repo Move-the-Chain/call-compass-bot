@@ -525,18 +525,31 @@ function SentimentTab() {
   );
 }
 
-function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
+function Brief({
+  c,
+  onClick,
+  resolved,
+  followUp,
+}: {
+  c: Call;
+  onClick: () => void;
+  resolved?: boolean;
+  followUp?: FollowUp;
+}) {
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   return (
     <button
       onClick={onClick}
-      className="group surface-card relative w-full overflow-hidden p-5 text-left transition-all hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]"
+      className={cn(
+        "group surface-card relative w-full overflow-hidden p-5 text-left transition-all hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]",
+        resolved && "opacity-70",
+      )}
     >
       <span
         className={cn(
           "absolute inset-y-0 left-0 w-[3px] transition-all",
-          sl.tone === "neg" ? "bg-neg" : sl.tone === "pos" ? "bg-pos" : "bg-neu",
+          resolved ? "bg-pos" : sl.tone === "neg" ? "bg-neg" : sl.tone === "pos" ? "bg-pos" : "bg-neu",
         )}
       />
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -545,7 +558,19 @@ function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
           {cl && <TierBadge t={cl.tier} />}
           <Chip tone={sl.tone}>{sl.txt}</Chip>
           <Chip>{c.topic}</Chip>
-          {c.follow === "Needs follow-up" && <Chip tone="neu">Needs follow-up</Chip>}
+          {resolved && (
+            <Chip tone="pos">
+              <Check className="h-3 w-3" /> Resolved
+            </Chip>
+          )}
+          {!resolved && followUp && (
+            <Chip tone="primary">
+              <UserPlus className="h-3 w-3" /> Follow-up · {followUp.agent}
+            </Chip>
+          )}
+          {!resolved && !followUp && c.follow === "Needs follow-up" && (
+            <Chip tone="neu">Needs follow-up</Chip>
+          )}
         </div>
         <span className="font-mono text-xs text-muted-foreground">
           {fmtTime(c.time)} · {mmss(c.dur)}
@@ -555,6 +580,11 @@ function Brief({ c, onClick }: { c: Call; onClick: () => void }) {
       <div className="mt-3 text-[11.5px] text-muted-foreground">
         Handled by <span className="text-foreground">{c.agent}</span>
         {agentOf(c.agent) ? ` · ${agentOf(c.agent)!.role}` : ""}
+        {followUp && (
+          <>
+            {" · "}follow-up due <span className="text-foreground">{followUp.due}</span>
+          </>
+        )}
       </div>
     </button>
   );
