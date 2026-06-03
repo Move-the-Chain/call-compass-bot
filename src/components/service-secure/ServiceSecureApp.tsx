@@ -2162,7 +2162,8 @@ function NotificationsView({
         <div className="surface-card overflow-hidden p-0">
           {rules.map((r, i) => {
             const chs = [r.channels.slack && "Slack", r.channels.email && "Email", r.channels.sms && "SMS"].filter(Boolean).join(" + ") || "No channel";
-            const recipientCount = r.recipientIds.length + people.filter((p) => r.recipientRoles.includes(p.role)).filter((p) => !r.recipientIds.includes(p.id)).length;
+            const rolesLc = r.recipientRoles.map((x) => x.toLowerCase());
+            const recipientCount = r.recipientIds.length + people.filter((p) => rolesLc.includes(p.role.toLowerCase())).filter((p) => !r.recipientIds.includes(p.id)).length;
             return (
               <div key={r.id} className={cn("flex flex-wrap items-center justify-between gap-4 px-5 py-4", i ? "border-t border-border" : "")}>
                 <div className="min-w-0 flex-1">
