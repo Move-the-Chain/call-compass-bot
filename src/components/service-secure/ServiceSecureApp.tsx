@@ -110,6 +110,7 @@ export default function ServiceSecureApp() {
   const [q, setQ] = useState("");
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
+  const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
 
   const toggleResolved = (id: number) =>
     setResolved((prev) => {
@@ -120,6 +121,14 @@ export default function ServiceSecureApp() {
     });
   const assignFollowUp = (id: number, fu: FollowUp) =>
     setFollowUps((prev) => ({ ...prev, [id]: fu }));
+  const assignAccount = (id: number, name: string) => {
+    setAcctOverrides((prev) => ({ ...prev, [id]: name }));
+    setSel((s) =>
+      s && s.id === id
+        ? { ...s, acct: name, flag: s.flag === "unmatched" ? "neutral" : s.flag, match: "name" }
+        : s,
+    );
+  };
 
   const open = (c: Call) => {
     setSel(c);
@@ -134,9 +143,14 @@ export default function ServiceSecureApp() {
     setScreen("agentDetail");
   };
 
-  const rangeCalls = useMemo(
-    () => filterCalls(range, customStart, customEnd),
-    [range, customStart, customEnd],
+  const rangeCalls = useMemo<Call[]>(
+    () =>
+      filterCalls(range, customStart, customEnd).map((c) =>
+        acctOverrides[c.id]
+          ? { ...c, acct: acctOverrides[c.id], flag: c.flag === "unmatched" ? "neutral" : c.flag, match: "name" }
+          : c,
+      ),
+    [range, customStart, customEnd, acctOverrides],
   );
 
   const filtered = useMemo(
@@ -286,7 +300,6 @@ export default function ServiceSecureApp() {
             fAcct={fAcct}
             setFAcct={setFAcct}
             onOpen={open}
-            onExport={() => downloadCSV("calls.csv", callsToRows(filtered))}
           />
         )}
         {screen === "agents" && (
@@ -323,6 +336,7 @@ export default function ServiceSecureApp() {
             followUp={followUps[sel.id]}
             onToggleResolved={() => toggleResolved(sel.id)}
             onAssignFollowUp={(fu) => assignFollowUp(sel.id, fu)}
+            onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
         {screen === "integrations" && <IntegrationsView />}
@@ -746,7 +760,6 @@ function ExplorerView({
   fAcct,
   setFAcct,
   onOpen,
-  onExport,
 }: {
   filtered: Call[];
   q: string;
@@ -758,7 +771,6 @@ function ExplorerView({
   fAcct: string;
   setFAcct: (v: string) => void;
   onOpen: (c: Call) => void;
-  onExport: () => void;
 }) {
   return (
     <div>
@@ -775,12 +787,6 @@ function ExplorerView({
         <Sel v={fSent} set={setFSent} opts={["All", "Negative", "Neutral", "Positive"]} label="Sentiment" />
         <Sel v={fAgent} set={setFAgent} opts={["All", ...AGENTS.map((a) => a.name)]} label="Agent" />
         <Sel v={fAcct} set={setFAcct} opts={["All", ...CLIENTS.map((c) => c.name)]} label="Account" />
-        <button
-          onClick={onExport}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[12.5px] font-medium transition hover:border-border-strong hover:bg-surface-2"
-        >
-          <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
       </div>
 
       <div className="surface-card overflow-hidden p-0">
@@ -1338,6 +1344,7 @@ function CallDetail({
   followUp,
   onToggleResolved,
   onAssignFollowUp,
+  onAssignAccount,
 }: {
   c: Call;
   onBack: () => void;
@@ -1345,9 +1352,11 @@ function CallDetail({
   followUp?: FollowUp;
   onToggleResolved: () => void;
   onAssignFollowUp: (fu: FollowUp) => void;
+  onAssignAccount: (name: string) => void;
 }) {
   const [playing, setPlaying] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const [showAcct, setShowAcct] = useState(false);
   const sl = sentLabel(c.sent);
   const cl = clientOf(c.acct);
   const ag = agentOf(c.agent);
@@ -1390,12 +1399,20 @@ function CallDetail({
               ? `${c.caller}${c.passenger && c.passenger !== "Self" && c.passenger !== "N/A (billing call)" ? ` · booking for ${c.passenger}` : ""}`
               : "Caller not identified"}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Chip tone={sl.tone}>{sl.txt}</Chip>
             <Chip>{c.topic}</Chip>
             <Chip tone={c.match === "phone" ? "pos" : c.match === "name" ? "neu" : "neg"}>
               {c.match === "phone" ? "Matched by number" : c.match === "name" ? "Matched by name (confirm)" : "Unmatched"}
             </Chip>
+            {!c.acct && (
+              <button
+                onClick={() => setShowAcct(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-medium text-primary transition hover:bg-primary/15"
+              >
+                <UserPlus className="h-3 w-3" /> Assign account
+              </button>
+            )}
           </div>
         </div>
         <div className="text-right font-mono text-xs text-muted-foreground">
@@ -1578,9 +1595,100 @@ function CallDetail({
           }}
         />
       )}
+      {showAcct && (
+        <AssignAccountModal
+          c={c}
+          onClose={() => setShowAcct(false)}
+          onSave={(name) => {
+            onAssignAccount(name);
+            setShowAcct(false);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+function AssignAccountModal({
+  c,
+  onClose,
+  onSave,
+}: {
+  c: Call;
+  onClose: () => void;
+  onSave: (name: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string>("");
+  const matches = CLIENTS.filter((cl) =>
+    cl.name.toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center bg-[oklch(0_0_0/0.55)] p-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="surface-card w-full max-w-[480px] p-6"
+      >
+        <div className="mb-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Link unmatched call
+          </div>
+          <div className="mt-1 font-display text-xl tracking-tight">Assign to account</div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            Caller "{c.caller || "Unknown"}" from {c.from}
+          </div>
+        </div>
+        <input
+          autoFocus
+          placeholder="Search accounts…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="mb-3 h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+        />
+        <div className="max-h-[260px] overflow-y-auto rounded-lg border border-border">
+          {matches.length === 0 && (
+            <div className="p-4 text-center text-xs text-muted-foreground">No accounts match.</div>
+          )}
+          {matches.map((cl) => (
+            <button
+              key={cl.name}
+              onClick={() => setSel(cl.name)}
+              className={cn(
+                "flex w-full items-center justify-between gap-2 border-b border-border px-3.5 py-2.5 text-left text-[13px] transition last:border-b-0 hover:bg-surface-2",
+                sel === cl.name && "bg-primary/10",
+              )}
+            >
+              <span className="flex items-center gap-2 font-medium">
+                {cl.name}
+                <TierBadge t={cl.tier} />
+              </span>
+              {sel === cl.name && <Check className="h-3.5 w-3.5 text-primary" />}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium hover:bg-surface-2"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!sel}
+            onClick={() => sel && onSave(sel)}
+            className="flex-1 rounded-lg bg-[image:var(--gradient-brand)] py-2.5 text-sm font-medium text-primary-foreground shadow-[0_8px_24px_-8px_oklch(0.7_0.16_255/0.6)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Link account
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function AssignFollowUpModal({
   c,
