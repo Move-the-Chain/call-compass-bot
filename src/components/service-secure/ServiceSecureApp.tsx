@@ -1,4 +1,16 @@
 import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  listPeople as listPeopleFn,
+  getMyAccess as getMyAccessFn,
+  createPerson as createPersonFn,
+  updatePerson as updatePersonFn,
+  setPersonRole as setPersonRoleFn,
+  deletePerson as deletePersonFn,
+} from "@/lib/access.functions";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -9,6 +21,7 @@ import {
   Download,
   Headphones,
   LayoutGrid,
+  LogOut,
   Mail,
   MessageSquare,
   Pause,
@@ -68,13 +81,14 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "explorer", label: "Call Explorer", icon: Search },
   { key: "agents", label: "Agent Scorecards", icon: Headphones },
   { key: "accounts", label: "Account Health", icon: Building2 },
-  { key: "admin", label: "Admin Center", icon: Shield },
+  { key: "admin", label: "Access Management", icon: Shield },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "notifications", label: "Notifications", icon: Bell },
 ];
 
-export type Role = "Admin" | "COO" | "Manager" | "Agent" | "Other";
-export const ROLES: Role[] = ["Admin", "COO", "Manager", "Agent", "Other"];
+export type Role = "admin" | "coo" | "manager" | "agent";
+export const ROLES: Role[] = ["admin", "coo", "manager", "agent"];
+export const ROLE_LABEL: Record<Role, string> = { admin: "Admin", coo: "COO", manager: "Manager", agent: "Agent" };
 export type Person = { id: string; name: string; email: string; phone: string; role: Role };
 export type Priority = "Low" | "Medium" | "High" | "Urgent";
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
@@ -89,18 +103,12 @@ export type AlertRule = {
   enabled: boolean;
 };
 
-const DEFAULT_PEOPLE: Person[] = [
-  { id: "p1", name: "Jordan Reyes", email: "jordan@servicesecure.io", role: "COO", phone: "+1 415 555 0142" },
-  { id: "p2", name: "Sam Mitchell", email: "sam@servicesecure.io", role: "Admin", phone: "+1 415 555 0188" },
-  { id: "p3", name: "Priya Shah", email: "priya@servicesecure.io", role: "Manager", phone: "+1 628 555 0117" },
-  { id: "p4", name: "Marco Bianchi", email: "marco@servicesecure.io", role: "Manager", phone: "" },
-];
 const DEFAULT_RULES: AlertRule[] = [
-  { id: "r1", title: "Very negative call", desc: "Sentiment below -0.5", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: ["p1", "p2"], recipientRoles: ["COO"], enabled: true },
-  { id: "r2", title: "Churn signal detected", desc: "Caller mentions leaving / other providers", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: ["p1"], recipientRoles: ["COO", "Manager"], enabled: true },
-  { id: "r3", title: "Tier 1 negative call", desc: "Any negative call from a Key account", channels: { slack: true, email: false, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["Manager"], enabled: true },
-  { id: "r4", title: "Repeat complaint", desc: "Same account, 2nd negative call in 7 days", channels: { slack: true, email: true, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["Manager"], enabled: true },
-  { id: "r5", title: "Positive standout", desc: "Sentiment above 0.7 (for recognition)", channels: { slack: false, email: true, sms: false }, priority: "Low", recipientIds: [], recipientRoles: ["Manager"], enabled: false },
+  { id: "r1", title: "Very negative call", desc: "Sentiment below -0.5", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo"], enabled: true },
+  { id: "r2", title: "Churn signal detected", desc: "Caller mentions leaving / other providers", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo", "manager"], enabled: true },
+  { id: "r3", title: "Tier 1 negative call", desc: "Any negative call from a Key account", channels: { slack: true, email: false, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
+  { id: "r4", title: "Repeat complaint", desc: "Same account, 2nd negative call in 7 days", channels: { slack: true, email: true, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
+  { id: "r5", title: "Positive standout", desc: "Sentiment above 0.7 (for recognition)", channels: { slack: false, email: true, sms: false }, priority: "Low", recipientIds: [], recipientRoles: ["manager"], enabled: false },
 ];
 
 function downloadCSV(filename: string, rows: (string | number)[][]) {
@@ -151,7 +159,29 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
-  const [people, setPeople] = useState<Person[]>(DEFAULT_PEOPLE);
+  const navigate = useNavigate();
+  const listPeople = useServerFn(listPeopleFn);
+  const getMyAccess = useServerFn(getMyAccessFn);
+  const peopleQuery = useQuery({
+    queryKey: ["access", "people"],
+    queryFn: () => listPeople(),
+  });
+  const meQuery = useQuery({
+    queryKey: ["access", "me"],
+    queryFn: () => getMyAccess(),
+  });
+  const people: Person[] = useMemo(
+    () =>
+      (peopleQuery.data ?? []).map((p) => ({
+        id: p.id,
+        name: p.name || p.email.split("@")[0],
+        email: p.email,
+        phone: p.phone,
+        role: (p.roles[0] ?? "agent") as Role,
+      })),
+    [peopleQuery.data],
+  );
+  const isAdmin = meQuery.data?.isAdmin ?? false;
   const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
   const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
@@ -263,18 +293,40 @@ export default function ServiceSecureApp() {
           })}
         </nav>
 
-        <div className="mt-auto rounded-xl border border-border bg-surface-2/60 p-3">
-          <div className="flex items-center gap-2 text-[11px] font-medium text-pos">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-pos" />
-            </span>
-            RingCentral connected
+        <div className="mt-auto space-y-3">
+          <div className="rounded-xl border border-border bg-surface-2/60 p-3">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-pos">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-pos" />
+              </span>
+              RingCentral connected
+            </div>
+            <div className="mt-2 font-mono text-xs text-muted-foreground">
+              <div className="text-foreground">412 calls today</div>
+              <div>{unmatched} unmatched · 8 flagged</div>
+            </div>
           </div>
-          <div className="mt-2 font-mono text-xs text-muted-foreground">
-            <div className="text-foreground">412 calls today</div>
-            <div>{unmatched} unmatched · 8 flagged</div>
-          </div>
+          {meQuery.data?.profile && (
+            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2/60 p-3">
+              <div className="min-w-0">
+                <div className="truncate text-[12.5px] font-medium">{meQuery.data.profile.name || meQuery.data.profile.email}</div>
+                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {meQuery.data.roles.map((r) => ROLE_LABEL[r as Role]).join(" · ") || "No role"}
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate({ to: "/auth" });
+                }}
+                title="Sign out"
+                className="ml-2 rounded-md p-1.5 text-muted-foreground hover:bg-surface hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -382,7 +434,7 @@ export default function ServiceSecureApp() {
             onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
-        {screen === "admin" && <AdminView people={people} setPeople={setPeople} />}
+        {screen === "admin" && <AccessManagementView people={people} isAdmin={isAdmin} />}
         {screen === "integrations" && <IntegrationsView />}
         {screen === "notifications" && (
           <NotificationsView
@@ -1884,41 +1936,66 @@ function IntegrationsView() {
   );
 }
 
-/* ---------------- Admin Center ---------------- */
-function AdminView({
-  people,
-  setPeople,
-}: {
-  people: Person[];
-  setPeople: React.Dispatch<React.SetStateAction<Person[]>>;
-}) {
-  const [editing, setEditing] = useState<Person | null>(null);
-  const blank = (): Person => ({ id: `p${Date.now()}`, name: "", email: "", phone: "", role: "Manager" });
+/* ---------------- Access Management ---------------- */
+type PersonDraft = { id?: string; name: string; email: string; phone: string; role: Role; password?: string };
+
+function AccessManagementView({ people, isAdmin }: { people: Person[]; isAdmin: boolean }) {
+  const [editing, setEditing] = useState<PersonDraft | null>(null);
+  const qc = useQueryClient();
+  const createPerson = useServerFn(createPersonFn);
+  const updatePerson = useServerFn(updatePersonFn);
+  const setPersonRole = useServerFn(setPersonRoleFn);
+  const deletePerson = useServerFn(deletePersonFn);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["access", "people"] });
+
+  const createMut = useMutation({
+    mutationFn: (d: PersonDraft) =>
+      createPerson({ data: { name: d.name, email: d.email, phone: d.phone, password: d.password ?? "", role: d.role } }),
+    onSuccess: () => { refresh(); setEditing(null); },
+  });
+  const updateMut = useMutation({
+    mutationFn: async (d: PersonDraft) => {
+      await updatePerson({ data: { userId: d.id!, name: d.name, phone: d.phone } });
+      await setPersonRole({ data: { userId: d.id!, role: d.role } });
+    },
+    onSuccess: () => { refresh(); setEditing(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deletePerson({ data: { userId: id } }),
+    onSuccess: refresh,
+  });
 
   const counts = ROLES.reduce<Record<string, number>>((acc, r) => {
     acc[r] = people.filter((p) => p.role === r).length;
     return acc;
   }, {});
 
+  const blank: PersonDraft = { name: "", email: "", phone: "", role: "agent", password: "" };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
-          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Admin Center</h1>
-          <p className="mt-2 text-sm text-muted-foreground">People and roles. Recipients here power your alert rules.</p>
+          <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Access Management</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Platform users and roles. Everyone here can sign in. {!isAdmin && <span className="text-neg">Only admins can add or edit.</span>}
+          </p>
         </div>
-        <button
-          onClick={() => setEditing(blank())}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
-        >
-          <Plus className="h-4 w-4" /> Add person
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setEditing(blank)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
+          >
+            <Plus className="h-4 w-4" /> Add user
+          </button>
+        )}
       </header>
 
       <div className="flex flex-wrap gap-2">
         {ROLES.map((r) => (
-          <Chip key={r} tone="muted">{r} · {counts[r] ?? 0}</Chip>
+          <Chip key={r} tone="muted">{ROLE_LABEL[r]} · {counts[r] ?? 0}</Chip>
         ))}
       </div>
 
@@ -1931,54 +2008,74 @@ function AdminView({
             <div className="font-medium">{p.name}</div>
             <div className="text-muted-foreground">{p.email}</div>
             <div className="text-muted-foreground">{p.phone || <span className="opacity-50">—</span>}</div>
-            <div><Chip tone="primary">{p.role}</Chip></div>
+            <div><Chip tone="primary">{ROLE_LABEL[p.role]}</Chip></div>
             <div className="flex justify-end gap-1">
-              <button onClick={() => setEditing(p)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => setPeople((ps) => ps.filter((x) => x.id !== p.id))} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
+              {isAdmin && (
+                <>
+                  <button onClick={() => setEditing({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role })} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete ${p.name || p.email}? This removes their account permanently.`)) deleteMut.mutate(p.id);
+                    }}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}
-        {people.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No people yet.</div>}
+        {people.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No users yet.</div>}
       </div>
 
       {editing && (
         <PersonModal
           person={editing}
-          isNew={!people.find((p) => p.id === editing.id)}
+          isNew={!editing.id}
+          busy={createMut.isPending || updateMut.isPending}
+          error={(createMut.error as Error | null)?.message ?? (updateMut.error as Error | null)?.message ?? null}
           onClose={() => setEditing(null)}
-          onSave={(p) => {
-            setPeople((ps) => (ps.find((x) => x.id === p.id) ? ps.map((x) => (x.id === p.id ? p : x)) : [...ps, p]));
-            setEditing(null);
-          }}
+          onSave={(p) => (p.id ? updateMut.mutate(p) : createMut.mutate(p))}
         />
       )}
     </div>
   );
 }
 
-function PersonModal({ person, isNew, onClose, onSave }: { person: Person; isNew: boolean; onClose: () => void; onSave: (p: Person) => void }) {
-  const [draft, setDraft] = useState<Person>(person);
-  const valid = draft.name.trim() && draft.email.trim();
+function PersonModal({ person, isNew, busy, error, onClose, onSave }: { person: PersonDraft; isNew: boolean; busy: boolean; error: string | null; onClose: () => void; onSave: (p: PersonDraft) => void }) {
+  const [draft, setDraft] = useState<PersonDraft>(person);
+  const valid = draft.name.trim() && draft.email.trim() && (!isNew || (draft.password ?? "").length >= 8);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="surface-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <div className="font-display text-xl">{isNew ? "Add person" : "Edit person"}</div>
+          <div className="font-display text-xl">{isNew ? "Add user" : "Edit user"}</div>
           <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-3">
           <Field label="Name"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="modal-input" /></Field>
-          <Field label="Email"><input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input" /></Field>
+          <Field label="Email">
+            <input type="email" value={draft.email} disabled={!isNew} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="modal-input disabled:opacity-60" />
+          </Field>
           <Field label="Phone (E.164 for SMS)"><input value={draft.phone} placeholder="+1 415 555 0142" onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="modal-input" /></Field>
           <Field label="Role">
             <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })} className="modal-input">
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
           </Field>
+          {isNew && (
+            <Field label="Temporary password (min 8 chars)">
+              <input type="text" value={draft.password ?? ""} onChange={(e) => setDraft({ ...draft, password: e.target.value })} className="modal-input" placeholder="Share securely with the user" />
+            </Field>
+          )}
         </div>
+        {error && <div className="mt-3 rounded-lg border border-neg/40 bg-neg/10 px-3 py-2 text-xs text-neg">{error}</div>}
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
-          <button disabled={!valid} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-40">Save</button>
+          <button disabled={!valid || busy} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-40">
+            {busy ? "Saving…" : isNew ? "Create user" : "Save"}
+          </button>
         </div>
       </div>
     </div>
@@ -2021,7 +2118,7 @@ function NotificationsView({
       <header>
         <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Wednesday · Jun 3, 2026</div>
         <h1 className="font-display mt-1 text-[34px] leading-none tracking-tight">Notifications</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Admin Center</button>.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>.</p>
       </header>
 
       <section>
@@ -2032,11 +2129,11 @@ function NotificationsView({
           <ChannelCard
             icon={Phone}
             title="SMS (Twilio)"
-            desc={smsReady ? "Texts the phone numbers in Admin Center" : "Add phone numbers in Admin Center first"}
+            desc={smsReady ? "Texts the phone numbers in Access Management" : "Add phone numbers in Access Management first"}
             on={channels.sms}
             disabled={!smsReady}
             onToggle={() => smsReady && setChannels((c) => ({ ...c, sms: !c.sms }))}
-            footer={!smsReady ? <button onClick={onGoAdmin} className="text-xs font-medium text-primary hover:underline">Go to Admin Center →</button> : null}
+            footer={!smsReady ? <button onClick={onGoAdmin} className="text-xs font-medium text-primary hover:underline">Go to Access Management →</button> : null}
           />
         </div>
       </section>
@@ -2206,7 +2303,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
                     draft.recipientRoles.includes(r) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
                   )}
                 >
-                  {r}
+                  {ROLE_LABEL[r]}
                 </button>
               ))}
             </div>
@@ -2214,7 +2311,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
 
           <Field label="Notify specific people">
             <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Admin Center.</div>}
+              {people.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">Add people in Access Management.</div>}
               {people.map((p) => {
                 const checked = draft.recipientIds.includes(p.id);
                 return (
@@ -2223,7 +2320,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
                       <input type="checkbox" checked={checked} onChange={() => togglePerson(p.id)} className="h-4 w-4 accent-[var(--primary)]" />
                       <div>
                         <div className="text-[13px] font-medium">{p.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{p.role} · {p.phone || "no phone"}</div>
+                        <div className="text-[11px] text-muted-foreground">{ROLE_LABEL[p.role]} · {p.phone || "no phone"}</div>
                       </div>
                     </div>
                     {draft.channels.sms && checked && !p.phone && <Chip tone="neg">No phone</Chip>}
