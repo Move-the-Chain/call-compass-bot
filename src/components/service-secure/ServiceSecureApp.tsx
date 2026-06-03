@@ -20,18 +20,28 @@ import {
 } from "lucide-react";
 import {
   AGENTS,
-  CALLS,
   CLIENTS,
   type Call,
   type Client,
   agentOf,
   clientOf,
+  dailyBuckets,
+  filterCalls,
   fmtTime,
   mmss,
   sentLabel,
 } from "@/lib/service-secure-data";
 import { cn } from "@/lib/utils";
-import { Chip, Kpi, SentimentDot, TierBadge } from "./primitives";
+import {
+  AgentDayHeatmap,
+  Chip,
+  DailyStackedBars,
+  DivergingBar,
+  Kpi,
+  SentimentDot,
+  Sparkline,
+  TierBadge,
+} from "./primitives";
 
 type Screen =
   | "summary"
@@ -124,9 +134,14 @@ export default function ServiceSecureApp() {
     setScreen("agentDetail");
   };
 
+  const rangeCalls = useMemo(
+    () => filterCalls(range, customStart, customEnd),
+    [range, customStart, customEnd],
+  );
+
   const filtered = useMemo(
     () =>
-      CALLS.filter((c) => {
+      rangeCalls.filter((c) => {
         if (fAgent !== "All" && c.agent !== fAgent) return false;
         if (fAcct !== "All" && c.acct !== fAcct) return false;
         if (fSent === "Negative" && c.sent >= -0.1) return false;
@@ -135,17 +150,17 @@ export default function ServiceSecureApp() {
         if (q && !`${c.acct} ${c.agent} ${c.topic} ${c.summary}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [fAgent, fAcct, fSent, q],
+    [rangeCalls, fAgent, fAcct, fSent, q],
   );
 
-  const total = CALLS.length;
-  const pos = CALLS.filter((c) => c.sent > 0.1).length;
-  const neg = CALLS.filter((c) => c.sent < -0.1).length;
-  const unmatched = CALLS.filter((c) => c.flag === "unmatched").length;
-  const todosNeg = CALLS.filter((c) => c.flag === "at-risk" || c.flag === "negative").sort(
+  const total = rangeCalls.length;
+  const pos = rangeCalls.filter((c) => c.sent > 0.1).length;
+  const neg = rangeCalls.filter((c) => c.sent < -0.1).length;
+  const unmatched = rangeCalls.filter((c) => c.flag === "unmatched").length;
+  const todosNeg = rangeCalls.filter((c) => c.flag === "at-risk" || c.flag === "negative").sort(
     (a, b) => (clientOf(a.acct)?.tier ?? 9) - (clientOf(b.acct)?.tier ?? 9),
   );
-  const todosPos = CALLS.filter((c) => c.flag === "positive");
+  const todosPos = rangeCalls.filter((c) => c.flag === "positive");
 
   const screenLabel = NAV.find((n) => n.key === screen)?.label ?? "";
 
@@ -230,7 +245,7 @@ export default function ServiceSecureApp() {
                   onClick={() =>
                     downloadCSV(
                       `calls-${range.toLowerCase().replace(/\s+/g, "-")}.csv`,
-                      callsToRows(CALLS),
+                      callsToRows(rangeCalls),
                     )
                   }
                   className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[12.5px] font-medium transition hover:border-border-strong hover:bg-surface-2"
@@ -244,11 +259,14 @@ export default function ServiceSecureApp() {
 
         {screen === "summary" && (
           <SummaryView
+            rangeCalls={rangeCalls}
             total={total}
             pos={pos}
             neg={neg}
             unmatched={unmatched}
             range={range}
+            customStart={customStart}
+            customEnd={customEnd}
             todosNeg={todosNeg}
             todosPos={todosPos}
             resolved={resolved}
@@ -271,18 +289,31 @@ export default function ServiceSecureApp() {
             onExport={() => downloadCSV("calls.csv", callsToRows(filtered))}
           />
         )}
-        {screen === "agents" && <AgentsView onOpen={openAgent} range={range} />}
+        {screen === "agents" && (
+          <AgentsView
+            rangeCalls={rangeCalls}
+            range={range}
+            customStart={customStart}
+            customEnd={customEnd}
+            onOpen={openAgent}
+          />
+        )}
         {screen === "agentDetail" && agentSel && (
           <AgentDetail
             name={agentSel}
+            rangeCalls={rangeCalls}
             range={range}
+            customStart={customStart}
+            customEnd={customEnd}
             onBack={() => setScreen("agents")}
             onCall={open}
           />
         )}
-        {screen === "accounts" && <AccountsView unmatched={unmatched} onOpen={openAcct} />}
+        {screen === "accounts" && (
+          <AccountsView rangeCalls={rangeCalls} unmatched={unmatched} onOpen={openAcct} />
+        )}
         {screen === "accountDetail" && acctSel && (
-          <AccountDetail cl={acctSel} onBack={() => setScreen("accounts")} onCall={open} />
+          <AccountDetail cl={acctSel} rangeCalls={rangeCalls} onBack={() => setScreen("accounts")} onCall={open} />
         )}
         {screen === "detail" && sel && (
           <CallDetail
@@ -359,22 +390,28 @@ function RangePicker({
 
 /* ---------------- Summary ---------------- */
 function SummaryView({
+  rangeCalls,
   total,
   pos,
   neg,
   unmatched,
   range,
+  customStart,
+  customEnd,
   todosNeg,
   todosPos,
   resolved,
   followUps,
   onOpen,
 }: {
+  rangeCalls: Call[];
   total: number;
   pos: number;
   neg: number;
   unmatched: number;
   range: string;
+  customStart: string;
+  customEnd: string;
   todosNeg: Call[];
   todosPos: Call[];
   resolved: Set<number>;
@@ -383,13 +420,14 @@ function SummaryView({
 }) {
   const [tab, setTab] = useState<"review" | "sentiment">("review");
   const openReview = todosNeg.filter((c) => !resolved.has(c.id));
+  const safePct = (n: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
 
   return (
     <div className="space-y-7">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Total calls" value={total} sub={range} />
-        <Kpi label="Positive" value={`${Math.round((pos / total) * 100)}%`} sub={`${pos} calls`} tone="pos" />
-        <Kpi label="Negative" value={`${Math.round((neg / total) * 100)}%`} sub={`${neg} calls`} tone="neg" accent />
+        <Kpi label="Positive" value={safePct(pos)} sub={`${pos} calls`} tone="pos" />
+        <Kpi label="Negative" value={safePct(neg)} sub={`${neg} calls`} tone="neg" accent={neg > 0} />
         <Kpi label="Unmatched" value={unmatched} sub="need linking" tone="neu" />
       </div>
 
@@ -434,7 +472,9 @@ function SummaryView({
           onOpen={onOpen}
         />
       )}
-      {tab === "sentiment" && <SentimentTab />}
+      {tab === "sentiment" && (
+        <SentimentTab rangeCalls={rangeCalls} range={range} customStart={customStart} customEnd={customEnd} />
+      )}
     </div>
   );
 }
@@ -515,7 +555,17 @@ function ReviewFeed({
 }
 
 /* ---------------- Sentiment tab ---------------- */
-function SentimentTab() {
+function SentimentTab({
+  rangeCalls,
+  range,
+  customStart,
+  customEnd,
+}: {
+  rangeCalls: Call[];
+  range: string;
+  customStart: string;
+  customEnd: string;
+}) {
   const [mode, setMode] = useState<"agent" | "account">("agent");
   const groups =
     mode === "agent"
@@ -523,27 +573,49 @@ function SentimentTab() {
           key: a.name,
           title: a.name,
           subtitle: a.role,
-          calls: CALLS.filter((c) => c.agent === a.name),
+          calls: rangeCalls.filter((c) => c.agent === a.name),
         }))
       : CLIENTS.map((cl) => ({
           key: cl.name,
           title: cl.name,
           subtitle: `Tier ${cl.tier}`,
-          calls: CALLS.filter((c) => c.acct === cl.name),
+          calls: rangeCalls.filter((c) => c.acct === cl.name),
         }));
 
+  const buckets = dailyBuckets(rangeCalls, range, customStart, customEnd);
+
   return (
-    <div className="surface-card p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Overall sentiment
+    <div className="space-y-5">
+      <div className="surface-card p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Call volume
+            </div>
+            <div className="font-display mt-1 text-xl">Over {range.toLowerCase()}</div>
           </div>
-          <div className="font-display mt-1 text-xl">
-            {mode === "agent" ? "By employee" : "By company"}
+          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "var(--primary)" }} />positive</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <DailyStackedBars data={buckets} />
+      </div>
+
+      <div className="surface-card p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Sentiment balance
+            </div>
+            <div className="font-display mt-1 text-xl">
+              {mode === "agent" ? "By employee" : "By company"}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              Bar shows negative ↔ positive split. Marker = average sentiment (−1 to +1).
+            </div>
+          </div>
           <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
             {(
               [
@@ -563,36 +635,35 @@ function SentimentTab() {
               </button>
             ))}
           </div>
-          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-pos" />positive</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
-          </div>
         </div>
-      </div>
-      <div className="space-y-3">
-        {groups.map((g) => {
-          if (!g.calls.length) return null;
-          const p = g.calls.filter((c) => c.sent > 0.1).length;
-          const n = g.calls.filter((c) => c.sent < -0.1).length;
-          const ne = g.calls.length - p - n;
-          return (
-            <div key={g.key} className="flex items-center gap-4">
-              <div className="w-44 text-[13px]">
-                <div className="truncate font-medium">{g.title}</div>
-                <div className="text-[11px] text-muted-foreground">{g.subtitle}</div>
+        <div className="grid grid-cols-[140px_1fr_60px] items-center gap-4 pb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div>{mode === "agent" ? "Employee" : "Company"}</div>
+          <div className="flex justify-between"><span>negative</span><span>0</span><span>positive</span></div>
+          <div className="text-right">Calls</div>
+        </div>
+        <div className="space-y-3">
+          {groups.map((g) => {
+            if (!g.calls.length) return null;
+            const p = g.calls.filter((c) => c.sent > 0.1).length;
+            const n = g.calls.filter((c) => c.sent < -0.1).length;
+            const avg = g.calls.reduce((s, c) => s + c.sent, 0) / g.calls.length;
+            return (
+              <div key={g.key} className="grid grid-cols-[140px_1fr_60px] items-center gap-4">
+                <div className="min-w-0 text-[13px]">
+                  <div className="truncate font-medium">{g.title}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{g.subtitle}</div>
+                </div>
+                <DivergingBar avg={avg} pos={p} neg={n} total={g.calls.length} />
+                <div className="text-right font-mono text-xs tabular-nums text-foreground">
+                  {g.calls.length}
+                </div>
               </div>
-              <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
-                <div className="bg-pos transition-all" style={{ width: `${(p / g.calls.length) * 100}%` }} />
-                <div className="bg-neu transition-all" style={{ width: `${(ne / g.calls.length) * 100}%` }} />
-                <div className="bg-neg transition-all" style={{ width: `${(n / g.calls.length) * 100}%` }} />
-              </div>
-              <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                {g.calls.length}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+          {!groups.some((g) => g.calls.length) && (
+            <div className="py-6 text-center text-sm text-muted-foreground">No calls in this range.</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -748,7 +819,7 @@ function ExplorerView({
         {!filtered.length && <div className="p-8 text-center text-sm text-muted-foreground">No calls match.</div>}
       </div>
       <div className="mt-3 text-xs text-muted-foreground">
-        {filtered.length} of {CALLS.length} calls
+        {filtered.length} calls in view
       </div>
     </div>
   );
@@ -771,23 +842,44 @@ function Sel({ v, set, opts, label }: { v: string; set: (v: string) => void; opt
 }
 
 /* ---------------- Agents ---------------- */
-function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: string }) {
+function AgentsView({
+  rangeCalls,
+  range,
+  customStart,
+  customEnd,
+  onOpen,
+}: {
+  rangeCalls: Call[];
+  range: string;
+  customStart: string;
+  customEnd: string;
+  onOpen: (name: string) => void;
+}) {
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"all" | "neg" | "pos">("all");
+  const [sort, setSort] = useState<"all" | "neg" | "pos" | "vol">("all");
   const list = AGENTS.filter((a) => {
     if (q && !`${a.name} ${a.role} ${a.ext}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   }).map((a) => {
-    const cs = CALLS.filter((c) => c.agent === a.name);
+    const cs = rangeCalls.filter((c) => c.agent === a.name);
     const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-    return { a, cs, avg };
+    const buckets = dailyBuckets(cs, range, customStart, customEnd);
+    return { a, cs, avg, buckets };
   });
   const sorted =
     sort === "neg"
       ? [...list].sort((x, y) => x.avg - y.avg)
       : sort === "pos"
       ? [...list].sort((x, y) => y.avg - x.avg)
+      : sort === "vol"
+      ? [...list].sort((x, y) => y.cs.length - x.cs.length)
       : list;
+
+  const heatmapDays = dailyBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
+  const heatmapRows = list.map((row) => ({
+    name: row.a.name,
+    counts: row.buckets.map((b) => b.count),
+  }));
 
   return (
     <div className="space-y-5">
@@ -816,14 +908,27 @@ function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: 
             className="h-9 rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
           >
             <option value="all">Sort: A–Z</option>
+            <option value="vol">Most calls first</option>
             <option value="neg">Most negative first</option>
             <option value="pos">Most positive first</option>
           </select>
         </div>
       </div>
 
+      {heatmapDays.length > 1 && (
+        <div className="surface-card p-6">
+          <div className="mb-4">
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Activity heatmap
+            </div>
+            <div className="font-display mt-1 text-xl">Calls per agent · per day</div>
+          </div>
+          <AgentDayHeatmap rows={heatmapRows} days={heatmapDays} />
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sorted.map(({ a, cs, avg }) => {
+        {sorted.map(({ a, cs, avg, buckets }) => {
           const sl = sentLabel(avg);
           return (
             <button
@@ -831,21 +936,24 @@ function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: 
               onClick={() => onOpen(a.name)}
               className="surface-card group p-6 text-left transition hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]"
             >
-              <div className="flex items-start gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
-                  {a.name.split(" ").map((p) => p[0]).join("")}
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold">{a.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {a.role} · <span className="font-mono">{a.ext}</span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
+                    {a.name.split(" ").map((p) => p[0]).join("")}
+                  </div>
+                  <div>
+                    <div className="text-[15px] font-semibold">{a.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.role} · <span className="font-mono">{a.ext}</span>
+                    </div>
                   </div>
                 </div>
+                <Sparkline values={buckets.map((b) => b.count)} width={86} height={32} />
               </div>
               <div className="mt-6 flex items-end justify-between">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls</div>
-                  <div className="font-mono text-2xl">{cs.length}</div>
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls · {range}</div>
+                  <div className="font-display text-2xl font-semibold">{cs.length}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Avg sentiment</div>
@@ -876,23 +984,28 @@ function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: 
 /* ---------------- Agent Detail ---------------- */
 function AgentDetail({
   name,
+  rangeCalls,
   range,
+  customStart,
+  customEnd,
   onBack,
   onCall,
 }: {
   name: string;
+  rangeCalls: Call[];
   range: string;
+  customStart: string;
+  customEnd: string;
   onBack: () => void;
   onCall: (c: Call) => void;
 }) {
   const a = agentOf(name);
-  const cs = CALLS.filter((c) => c.agent === name);
+  const cs = rangeCalls.filter((c) => c.agent === name);
   const p = cs.filter((c) => c.sent > 0.1).length;
   const n = cs.filter((c) => c.sent < -0.1).length;
-  const nu = cs.length - p - n;
   const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-  const sl = sentLabel(avg);
   const longest = cs.length ? Math.max(...cs.map((c) => c.dur)) : 0;
+  const buckets = dailyBuckets(cs, range, customStart, customEnd);
 
   return (
     <div>
@@ -932,20 +1045,29 @@ function AgentDetail({
         <Kpi label="Longest call" value={longest ? mmss(longest) : "—"} sub="duration" />
       </div>
 
-      <div className="surface-card mt-6 p-6">
-        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Sentiment split</div>
-        <div className="mb-3 flex h-3 overflow-hidden rounded-full bg-surface-2">
-          {cs.length > 0 && (
-            <>
-              <div className="bg-pos" style={{ width: `${(p / cs.length) * 100}%` }} />
-              <div className="bg-neu" style={{ width: `${(nu / cs.length) * 100}%` }} />
-              <div className="bg-neg" style={{ width: `${(n / cs.length) * 100}%` }} />
-            </>
-          )}
+      {buckets.length > 1 && (
+        <div className="surface-card mt-6 p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Calls per day</div>
+              <div className="font-display mt-1 text-lg">{range}</div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "var(--primary)" }} />positive</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
+            </div>
+          </div>
+          <DailyStackedBars data={buckets} />
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{p} positive · {nu} neutral · {n} negative</span>
-          <span className={sl.cls}>Avg: {sl.txt}</span>
+      )}
+
+      <div className="surface-card mt-6 p-6">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Sentiment balance</div>
+        <DivergingBar avg={avg} pos={p} neg={n} total={cs.length} height={12} />
+        <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+          <span>{n} negative · {cs.length - p - n} neutral · {p} positive</span>
+          <span className="font-mono">avg {avg.toFixed(2)}</span>
         </div>
       </div>
 
@@ -967,7 +1089,7 @@ function AgentDetail({
 }
 
 /* ---------------- Accounts ---------------- */
-function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Client) => void }) {
+function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; unmatched: number; onOpen: (c: Client) => void }) {
   return (
     <div className="space-y-6">
       {unmatched > 0 && (
@@ -978,7 +1100,7 @@ function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Cl
           <p className="mb-4 text-[13px] text-muted-foreground">
             The caller's number isn't on any client's record. Link it once and future calls auto-match.
           </p>
-          {CALLS.filter((c) => c.flag === "unmatched").map((c) => (
+          {rangeCalls.filter((c) => c.flag === "unmatched").map((c) => (
             <div
               key={c.id}
               className="flex items-center justify-between gap-3 border-t border-border py-3 first:border-t-0"
@@ -1005,7 +1127,7 @@ function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Cl
           onClick={() => {
             const rows: (string | number)[][] = [["Account", "Tier", "Calls", "Positive", "Negative", "Avg sentiment"]];
             CLIENTS.forEach((cl) => {
-              const cs = CALLS.filter((c) => c.acct === cl.name);
+              const cs = rangeCalls.filter((c) => c.acct === cl.name);
               const p = cs.filter((c) => c.sent > 0.1).length;
               const n = cs.filter((c) => c.sent < -0.1).length;
               const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
@@ -1023,7 +1145,7 @@ function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Cl
         {[...CLIENTS]
           .sort((a, b) => a.tier - b.tier)
           .map((cl) => {
-            const cs = CALLS.filter((c) => c.acct === cl.name);
+            const cs = rangeCalls.filter((c) => c.acct === cl.name);
             const p = cs.filter((c) => c.sent > 0.1).length;
             const n = cs.filter((c) => c.sent < -0.1).length;
             const nu = cs.length - p - n;
@@ -1076,9 +1198,9 @@ function AccountsView({ unmatched, onOpen }: { unmatched: number; onOpen: (c: Cl
 }
 
 /* ---------------- Account Detail ---------------- */
-function AccountDetail({ cl, onBack, onCall }: { cl: Client; onBack: () => void; onCall: (c: Call) => void }) {
+function AccountDetail({ cl, rangeCalls, onBack, onCall }: { cl: Client; rangeCalls: Call[]; onBack: () => void; onCall: (c: Call) => void }) {
   const [tab, setTab] = useState<"kpis" | "calls" | "contacts">("kpis");
-  const cs = CALLS.filter((c) => c.acct === cl.name);
+  const cs = rangeCalls.filter((c) => c.acct === cl.name);
   const p = cs.filter((c) => c.sent > 0.1).length;
   const n = cs.filter((c) => c.sent < -0.1).length;
   const nu = cs.length - p - n;
