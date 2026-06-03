@@ -3,20 +3,16 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export type JobTitle = "coo" | "manager" | "agent" | "contact" | "other";
-export const JOB_TITLES: JobTitle[] = ["coo", "manager", "agent", "contact", "other"];
-
 export type PersonRow = {
   id: string;
   name: string;
   email: string;
   phone: string;
-  title: JobTitle;
+  title: string;
 };
 
-function normalizeTitle(t: string | null | undefined): JobTitle {
-  const v = (t ?? "").toLowerCase();
-  return (JOB_TITLES as string[]).includes(v) ? (v as JobTitle) : "other";
+function normalizeTitle(t: string | null | undefined): string {
+  return (t ?? "").toString().trim().slice(0, 80);
 }
 
 export const listPeople = createServerFn({ method: "GET" })
