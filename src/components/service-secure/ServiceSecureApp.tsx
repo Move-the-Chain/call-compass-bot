@@ -557,7 +557,17 @@ function ReviewFeed({
 }
 
 /* ---------------- Sentiment tab ---------------- */
-function SentimentTab() {
+function SentimentTab({
+  rangeCalls,
+  range,
+  customStart,
+  customEnd,
+}: {
+  rangeCalls: Call[];
+  range: string;
+  customStart: string;
+  customEnd: string;
+}) {
   const [mode, setMode] = useState<"agent" | "account">("agent");
   const groups =
     mode === "agent"
@@ -565,27 +575,49 @@ function SentimentTab() {
           key: a.name,
           title: a.name,
           subtitle: a.role,
-          calls: CALLS.filter((c) => c.agent === a.name),
+          calls: rangeCalls.filter((c) => c.agent === a.name),
         }))
       : CLIENTS.map((cl) => ({
           key: cl.name,
           title: cl.name,
           subtitle: `Tier ${cl.tier}`,
-          calls: CALLS.filter((c) => c.acct === cl.name),
+          calls: rangeCalls.filter((c) => c.acct === cl.name),
         }));
 
+  const buckets = dailyBuckets(rangeCalls, range, customStart, customEnd);
+
   return (
-    <div className="surface-card p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Overall sentiment
+    <div className="space-y-5">
+      <div className="surface-card p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Call volume
+            </div>
+            <div className="font-display mt-1 text-xl">Over {range.toLowerCase()}</div>
           </div>
-          <div className="font-display mt-1 text-xl">
-            {mode === "agent" ? "By employee" : "By company"}
+          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "var(--primary)" }} />positive</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <DailyStackedBars data={buckets} />
+      </div>
+
+      <div className="surface-card p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Sentiment balance
+            </div>
+            <div className="font-display mt-1 text-xl">
+              {mode === "agent" ? "By employee" : "By company"}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              Bar shows negative ↔ positive split. Marker = average sentiment (−1 to +1).
+            </div>
+          </div>
           <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1">
             {(
               [
@@ -605,36 +637,35 @@ function SentimentTab() {
               </button>
             ))}
           </div>
-          <div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-pos" />positive</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neu" />neutral</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
-          </div>
         </div>
-      </div>
-      <div className="space-y-3">
-        {groups.map((g) => {
-          if (!g.calls.length) return null;
-          const p = g.calls.filter((c) => c.sent > 0.1).length;
-          const n = g.calls.filter((c) => c.sent < -0.1).length;
-          const ne = g.calls.length - p - n;
-          return (
-            <div key={g.key} className="flex items-center gap-4">
-              <div className="w-44 text-[13px]">
-                <div className="truncate font-medium">{g.title}</div>
-                <div className="text-[11px] text-muted-foreground">{g.subtitle}</div>
+        <div className="grid grid-cols-[140px_1fr_60px] items-center gap-4 pb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div>{mode === "agent" ? "Employee" : "Company"}</div>
+          <div className="flex justify-between"><span>negative</span><span>0</span><span>positive</span></div>
+          <div className="text-right">Calls</div>
+        </div>
+        <div className="space-y-3">
+          {groups.map((g) => {
+            if (!g.calls.length) return null;
+            const p = g.calls.filter((c) => c.sent > 0.1).length;
+            const n = g.calls.filter((c) => c.sent < -0.1).length;
+            const avg = g.calls.reduce((s, c) => s + c.sent, 0) / g.calls.length;
+            return (
+              <div key={g.key} className="grid grid-cols-[140px_1fr_60px] items-center gap-4">
+                <div className="min-w-0 text-[13px]">
+                  <div className="truncate font-medium">{g.title}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{g.subtitle}</div>
+                </div>
+                <DivergingBar avg={avg} pos={p} neg={n} total={g.calls.length} />
+                <div className="text-right font-mono text-xs tabular-nums text-foreground">
+                  {g.calls.length}
+                </div>
               </div>
-              <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2">
-                <div className="bg-pos transition-all" style={{ width: `${(p / g.calls.length) * 100}%` }} />
-                <div className="bg-neu transition-all" style={{ width: `${(ne / g.calls.length) * 100}%` }} />
-                <div className="bg-neg transition-all" style={{ width: `${(n / g.calls.length) * 100}%` }} />
-              </div>
-              <div className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                {g.calls.length}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+          {!groups.some((g) => g.calls.length) && (
+            <div className="py-6 text-center text-sm text-muted-foreground">No calls in this range.</div>
+          )}
+        </div>
       </div>
     </div>
   );
