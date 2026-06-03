@@ -302,22 +302,57 @@ export default function ServiceSecureApp() {
 }
 
 /* ---------------- Range picker ---------------- */
-function RangePicker({ range, set }: { range: string; set: (v: string) => void }) {
+function RangePicker({
+  range,
+  set,
+  customStart,
+  customEnd,
+  setCustomStart,
+  setCustomEnd,
+}: {
+  range: string;
+  set: (v: string) => void;
+  customStart: string;
+  customEnd: string;
+  setCustomStart: (v: string) => void;
+  setCustomEnd: (v: string) => void;
+}) {
   const options = ["Today", "7 days", "30 days", "Custom"];
   return (
-    <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1 backdrop-blur">
-      {options.map((r) => (
-        <button
-          key={r}
-          onClick={() => set(r)}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-[12.5px] font-medium transition",
-            range === r ? "bg-surface-2 text-foreground shadow-[inset_0_1px_0_oklch(1_0_0/0.05)]" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {r}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex gap-1 rounded-lg border border-border bg-surface/60 p-1 backdrop-blur">
+        {options.map((r) => (
+          <button
+            key={r}
+            onClick={() => set(r)}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-[12.5px] font-medium transition",
+              range === r
+                ? "bg-surface-2 text-foreground shadow-[inset_0_1px_0_oklch(1_0_0/0.05)]"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      {range === "Custom" && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-2 py-1 backdrop-blur">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="h-8 rounded-md border border-transparent bg-transparent px-2 text-[12.5px] outline-none focus:border-primary/60"
+          />
+          <span className="text-muted-foreground">→</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="h-8 rounded-md border border-transparent bg-transparent px-2 text-[12.5px] outline-none focus:border-primary/60"
+          />
+        </div>
+      )}
     </div>
   );
 }
