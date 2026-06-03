@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import {
   AgentDayHeatmap,
   Chip,
-  DailyStackedBars,
+  VolumeBars,
   DivergingBar,
   Kpi,
   SentimentDot,
@@ -596,7 +596,7 @@ function SentimentTab({
           calls: rangeCalls.filter((c) => c.acct === cl.name),
         }));
 
-  const buckets = dailyBuckets(rangeCalls, range, customStart, customEnd);
+  const buckets = volumeBuckets(rangeCalls, range, customStart, customEnd);
 
   return (
     <div className="space-y-5">
@@ -614,7 +614,7 @@ function SentimentTab({
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
           </div>
         </div>
-        <DailyStackedBars data={buckets} />
+        <VolumeBars data={buckets} />
       </div>
 
       <div className="surface-card p-6">
@@ -869,7 +869,7 @@ function AgentsView({
   }).map((a) => {
     const cs = rangeCalls.filter((c) => c.agent === a.name);
     const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-    const buckets = dailyBuckets(cs, range, customStart, customEnd);
+    const buckets = volumeBuckets(cs, range, customStart, customEnd);
     return { a, cs, avg, buckets };
   });
   const sorted =
@@ -881,7 +881,7 @@ function AgentsView({
       ? [...list].sort((x, y) => y.cs.length - x.cs.length)
       : list;
 
-  const heatmapDays = dailyBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
+  const heatmapDays = volumeBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
   const heatmapRows = list.map((row) => ({
     name: row.a.name,
     counts: row.buckets.map((b) => b.count),
@@ -1011,7 +1011,7 @@ function AgentDetail({
   const n = cs.filter((c) => c.sent < -0.1).length;
   const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
   const longest = cs.length ? Math.max(...cs.map((c) => c.dur)) : 0;
-  const buckets = dailyBuckets(cs, range, customStart, customEnd);
+  const buckets = volumeBuckets(cs, range, customStart, customEnd);
 
   return (
     <div>
@@ -1064,7 +1064,7 @@ function AgentDetail({
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-neg" />negative</span>
             </div>
           </div>
-          <DailyStackedBars data={buckets} />
+          <VolumeBars data={buckets} />
         </div>
       )}
 
