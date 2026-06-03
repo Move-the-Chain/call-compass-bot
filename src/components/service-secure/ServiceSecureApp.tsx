@@ -2291,20 +2291,21 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
             </div>
           </Field>
 
-          <Field label="Notify roles">
+          <Field label="Notify titles">
             <div className="flex flex-wrap gap-2">
-              {ROLES.map((r) => (
+              {Array.from(new Set([...people.map((p) => p.role), ...draft.recipientRoles].filter(Boolean))).map((r) => (
                 <button
                   key={r}
                   onClick={() => toggleRole(r)}
                   className={cn(
                     "rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
-                    draft.recipientRoles.includes(r) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
+                    draft.recipientRoles.some((x) => x.toLowerCase() === r.toLowerCase()) ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-surface-2",
                   )}
                 >
-                  {ROLE_LABEL[r]}
+                  {roleLabel(r)}
                 </button>
               ))}
+              {people.length === 0 && <div className="text-xs text-muted-foreground">Add people in Access Management to target by title.</div>}
             </div>
           </Field>
 
