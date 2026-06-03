@@ -146,7 +146,26 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
-  const [people, setPeople] = useState<Person[]>(DEFAULT_PEOPLE);
+  const peopleQuery = useQuery({
+    queryKey: ["access", "people"],
+    queryFn: () => listPeople(),
+  });
+  const meQuery = useQuery({
+    queryKey: ["access", "me"],
+    queryFn: () => getMyAccess(),
+  });
+  const people: Person[] = useMemo(
+    () =>
+      (peopleQuery.data ?? []).map((p) => ({
+        id: p.id,
+        name: p.name || p.email.split("@")[0],
+        email: p.email,
+        phone: p.phone,
+        role: (p.roles[0] ?? "agent") as Role,
+      })),
+    [peopleQuery.data],
+  );
+  const isAdmin = meQuery.data?.isAdmin ?? false;
   const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
   const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
