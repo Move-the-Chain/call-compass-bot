@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_rules: {
+        Row: {
+          channel_email: boolean
+          channel_slack: boolean
+          channel_sms: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          enabled: boolean
+          id: string
+          position: number
+          priority: string
+          recipient_ids: string[]
+          recipient_titles: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          channel_email?: boolean
+          channel_slack?: boolean
+          channel_sms?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          enabled?: boolean
+          id?: string
+          position?: number
+          priority?: string
+          recipient_ids?: string[]
+          recipient_titles?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          channel_email?: boolean
+          channel_slack?: boolean
+          channel_sms?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          enabled?: boolean
+          id?: string
+          position?: number
+          priority?: string
+          recipient_ids?: string[]
+          recipient_titles?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

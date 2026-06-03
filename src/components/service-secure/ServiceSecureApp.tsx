@@ -11,6 +11,12 @@ import {
   deletePerson as deletePersonFn,
 } from "@/lib/access.functions";
 import {
+  listAlertRules as listAlertRulesFn,
+  upsertAlertRule as upsertAlertRuleFn,
+  setAlertRuleEnabled as setAlertRuleEnabledFn,
+  deleteAlertRule as deleteAlertRuleFn,
+} from "@/lib/alert-rules.functions";
+import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
@@ -113,13 +119,6 @@ export type AlertRule = {
   enabled: boolean;
 };
 
-const DEFAULT_RULES: AlertRule[] = [
-  { id: "r1", title: "Very negative call", desc: "Sentiment below -0.5", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo"], enabled: true },
-  { id: "r2", title: "Churn signal detected", desc: "Caller mentions leaving / other providers", channels: { slack: true, email: false, sms: true }, priority: "Urgent", recipientIds: [], recipientRoles: ["coo", "manager"], enabled: true },
-  { id: "r3", title: "Tier 1 negative call", desc: "Any negative call from a Key account", channels: { slack: true, email: false, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
-  { id: "r4", title: "Repeat complaint", desc: "Same account, 2nd negative call in 7 days", channels: { slack: true, email: true, sms: false }, priority: "High", recipientIds: [], recipientRoles: ["manager"], enabled: true },
-  { id: "r5", title: "Positive standout", desc: "Sentiment above 0.7 (for recognition)", channels: { slack: false, email: true, sms: false }, priority: "Low", recipientIds: [], recipientRoles: ["manager"], enabled: false },
-];
 
 function downloadCSV(filename: string, rows: (string | number)[][]) {
   const esc = (v: unknown) => {
@@ -191,7 +190,6 @@ export default function ServiceSecureApp() {
       })),
     [peopleQuery.data],
   );
-  const [rules, setRules] = useState<AlertRule[]>(DEFAULT_RULES);
   const [channels, setChannels] = useState({ slack: true, email: true, sms: false });
 
   const toggleResolved = (id: number) =>
@@ -448,8 +446,6 @@ export default function ServiceSecureApp() {
         {screen === "notifications" && (
           <NotificationsView
             people={people}
-            rules={rules}
-            setRules={setRules}
             channels={channels}
             setChannels={setChannels}
             onGoAdmin={() => setScreen("admin")}
@@ -2098,24 +2094,71 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ---------------- Notifications ---------------- */
 function NotificationsView({
   people,
-  rules,
-  setRules,
   channels,
   setChannels,
   onGoAdmin,
 }: {
   people: Person[];
-  rules: AlertRule[];
-  setRules: React.Dispatch<React.SetStateAction<AlertRule[]>>;
   channels: { slack: boolean; email: boolean; sms: boolean };
   setChannels: React.Dispatch<React.SetStateAction<{ slack: boolean; email: boolean; sms: boolean }>>;
   onGoAdmin: () => void;
 }) {
-  const [editing, setEditing] = useState<AlertRule | null>(null);
-  const peopleById = useMemo(() => Object.fromEntries(people.map((p) => [p.id, p])), [people]);
+  const [editing, setEditing] = useState<{ rule: AlertRule; isNew: boolean } | null>(null);
   const smsReady = people.some((p) => p.phone.trim().length > 0);
-
   const priorityTone = (p: Priority) => (p === "Urgent" ? "neg" : p === "High" ? "primary" : p === "Medium" ? "neu" : "muted");
+
+  const queryClient = useQueryClient();
+  const listRules = useServerFn(listAlertRulesFn);
+  const upsertRule = useServerFn(upsertAlertRuleFn);
+  const setEnabled = useServerFn(setAlertRuleEnabledFn);
+  const deleteRule = useServerFn(deleteAlertRuleFn);
+
+  const rulesQuery = useQuery({
+    queryKey: ["alert-rules"],
+    queryFn: () => listRules(),
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
+
+  const upsertMutation = useMutation({
+    mutationFn: (r: AlertRule & { isNew: boolean }) =>
+      upsertRule({
+        data: {
+          id: r.isNew ? undefined : r.id,
+          title: r.title,
+          desc: r.desc,
+          priority: r.priority,
+          channels: r.channels,
+          recipientIds: r.recipientIds,
+          recipientRoles: r.recipientRoles,
+          enabled: r.enabled,
+          position: 0,
+        },
+      }),
+    onSuccess: () => {
+      invalidate();
+      setEditing(null);
+    },
+  });
+  const toggleMutation = useMutation({
+    mutationFn: (v: { id: string; enabled: boolean }) => setEnabled({ data: v }),
+    onSuccess: invalidate,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteRule({ data: { id } }),
+    onSuccess: invalidate,
+  });
+
+  const rules: AlertRule[] = (rulesQuery.data ?? []).map((r) => ({
+    id: r.id,
+    title: r.title,
+    desc: r.desc,
+    priority: r.priority as Priority,
+    channels: r.channels,
+    recipientIds: r.recipientIds,
+    recipientRoles: r.recipientRoles,
+    enabled: r.enabled,
+  }));
 
   return (
     <div className="space-y-8">
@@ -2144,14 +2187,17 @@ function NotificationsView({
           <button
             onClick={() =>
               setEditing({
-                id: `r${Date.now()}`,
-                title: "New rule",
-                desc: "",
-                channels: { slack: true, email: false, sms: false },
-                priority: "Medium",
-                recipientIds: [],
-                recipientRoles: [],
-                enabled: true,
+                isNew: true,
+                rule: {
+                  id: "",
+                  title: "New rule",
+                  desc: "",
+                  channels: { slack: true, email: false, sms: false },
+                  priority: "Medium",
+                  recipientIds: [],
+                  recipientRoles: [],
+                  enabled: true,
+                },
               })
             }
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-surface-2"
@@ -2161,6 +2207,8 @@ function NotificationsView({
         </div>
 
         <div className="surface-card overflow-hidden p-0">
+          {rulesQuery.isLoading && <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading rules…</div>}
+          {rulesQuery.error && <div className="px-5 py-8 text-center text-sm text-neg">Failed to load rules.</div>}
           {rules.map((r, i) => {
             const chs = [r.channels.slack && "Slack", r.channels.email && "Email", r.channels.sms && "SMS"].filter(Boolean).join(" + ") || "No channel";
             const rolesLc = r.recipientRoles.map((x) => x.toLowerCase());
@@ -2178,10 +2226,10 @@ function NotificationsView({
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setEditing(r)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => setRules((rs) => rs.filter((x) => x.id !== r.id))} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setEditing({ rule: r, isNew: false })} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => deleteMutation.mutate(r.id)} className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-neg"><Trash2 className="h-3.5 w-3.5" /></button>
                   <button
-                    onClick={() => setRules((rs) => rs.map((x) => (x.id === r.id ? { ...x, enabled: !x.enabled } : x)))}
+                    onClick={() => toggleMutation.mutate({ id: r.id, enabled: !r.enabled })}
                     aria-label="Toggle rule"
                     className={cn("relative h-[22px] w-[40px] rounded-full transition", r.enabled ? "bg-pos shadow-[0_0_12px_oklch(0.72_0.16_152/0.5)]" : "bg-border-strong")}
                   >
@@ -2191,19 +2239,19 @@ function NotificationsView({
               </div>
             );
           })}
-          {rules.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No rules yet.</div>}
+          {!rulesQuery.isLoading && rules.length === 0 && <div className="px-5 py-8 text-center text-sm text-muted-foreground">No rules yet.</div>}
         </div>
+        {upsertMutation.error && <div className="mt-2 text-xs text-neg">Save failed: {(upsertMutation.error as Error).message}</div>}
+        {deleteMutation.error && <div className="mt-2 text-xs text-neg">Delete failed: {(deleteMutation.error as Error).message}</div>}
       </section>
 
       {editing && (
         <RuleModal
-          rule={editing}
+          rule={editing.rule}
           people={people}
+          saving={upsertMutation.isPending}
           onClose={() => setEditing(null)}
-          onSave={(r) => {
-            setRules((rs) => (rs.find((x) => x.id === r.id) ? rs.map((x) => (x.id === r.id ? r : x)) : [...rs, r]));
-            setEditing(null);
-          }}
+          onSave={(r) => upsertMutation.mutate({ ...r, isNew: editing.isNew })}
         />
       )}
     </div>
@@ -2238,7 +2286,7 @@ function ChannelCard({ icon: Icon, title, desc, on, onToggle, disabled, footer }
   );
 }
 
-function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void }) {
+function RuleModal({ rule, people, onClose, onSave, saving }: { rule: AlertRule; people: Person[]; onClose: () => void; onSave: (r: AlertRule) => void; saving?: boolean }) {
   const [draft, setDraft] = useState<AlertRule>(rule);
   const [mode, setMode] = useState<"roles" | "people">(rule.recipientIds.length > 0 && rule.recipientRoles.length === 0 ? "people" : "roles");
   const toggleRole = (r: Role) =>
@@ -2360,7 +2408,7 @@ function RuleModal({ rule, people, onClose, onSave }: { rule: AlertRule; people:
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-3.5 py-2 text-[13px] hover:bg-surface-2">Cancel</button>
-          <button onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110">Save rule</button>
+          <button disabled={saving} onClick={() => onSave(draft)} className="rounded-lg bg-[image:var(--gradient-brand)] px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition hover:brightness-110 disabled:opacity-60">{saving ? "Saving…" : "Save rule"}</button>
         </div>
       </div>
     </div>
