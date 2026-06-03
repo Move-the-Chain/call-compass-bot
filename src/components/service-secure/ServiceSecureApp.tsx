@@ -85,9 +85,20 @@ const NAV: Array<{ key: Screen; label: string; icon: React.ComponentType<{ class
   { key: "notifications", label: "Notifications", icon: Bell },
 ];
 
-export type Role = "coo" | "manager" | "agent" | "contact" | "other";
-export const ROLES: Role[] = ["coo", "manager", "agent", "contact", "other"];
-export const ROLE_LABEL: Record<Role, string> = { coo: "COO", manager: "Manager", agent: "Agent", contact: "Contact", other: "Other" };
+export type Role = string;
+export const TITLE_SUGGESTIONS = ["COO", "Manager", "Agent", "Contact", "Sales", "Support"];
+export function roleLabel(r: string): string {
+  const s = (r ?? "").trim();
+  if (!s) return "—";
+  if (s.length <= 4) return s.toUpperCase();
+  return s
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+// Back-compat exports (some call sites still reference these)
+export const ROLES: Role[] = TITLE_SUGGESTIONS;
+export const ROLE_LABEL = new Proxy({} as Record<string, string>, { get: (_t, k: string) => roleLabel(k) });
 export type Person = { id: string; name: string; email: string; phone: string; role: Role };
 export type Priority = "Low" | "Medium" | "High" | "Urgent";
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
