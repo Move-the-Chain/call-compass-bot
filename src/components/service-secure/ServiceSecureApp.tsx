@@ -1102,7 +1102,7 @@ function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; u
           <p className="mb-4 text-[13px] text-muted-foreground">
             The caller's number isn't on any client's record. Link it once and future calls auto-match.
           </p>
-          {CALLS.filter((c) => c.flag === "unmatched").map((c) => (
+          {rangeCalls.filter((c) => c.flag === "unmatched").map((c) => (
             <div
               key={c.id}
               className="flex items-center justify-between gap-3 border-t border-border py-3 first:border-t-0"
@@ -1129,7 +1129,7 @@ function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; u
           onClick={() => {
             const rows: (string | number)[][] = [["Account", "Tier", "Calls", "Positive", "Negative", "Avg sentiment"]];
             CLIENTS.forEach((cl) => {
-              const cs = CALLS.filter((c) => c.acct === cl.name);
+              const cs = rangeCalls.filter((c) => c.acct === cl.name);
               const p = cs.filter((c) => c.sent > 0.1).length;
               const n = cs.filter((c) => c.sent < -0.1).length;
               const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
@@ -1147,7 +1147,7 @@ function AccountsView({ rangeCalls, unmatched, onOpen }: { rangeCalls: Call[]; u
         {[...CLIENTS]
           .sort((a, b) => a.tier - b.tier)
           .map((cl) => {
-            const cs = CALLS.filter((c) => c.acct === cl.name);
+            const cs = rangeCalls.filter((c) => c.acct === cl.name);
             const p = cs.filter((c) => c.sent > 0.1).length;
             const n = cs.filter((c) => c.sent < -0.1).length;
             const nu = cs.length - p - n;
