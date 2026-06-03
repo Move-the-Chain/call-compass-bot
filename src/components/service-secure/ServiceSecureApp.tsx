@@ -8,7 +8,6 @@ import {
   getMyAccess as getMyAccessFn,
   createPerson as createPersonFn,
   updatePerson as updatePersonFn,
-  setPersonRole as setPersonRoleFn,
   deletePerson as deletePersonFn,
 } from "@/lib/access.functions";
 import {
