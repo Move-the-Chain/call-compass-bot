@@ -771,44 +771,197 @@ function Sel({ v, set, opts, label }: { v: string; set: (v: string) => void; opt
 }
 
 /* ---------------- Agents ---------------- */
-function AgentsView() {
+function AgentsView({ onOpen, range }: { onOpen: (name: string) => void; range: string }) {
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"all" | "neg" | "pos">("all");
+  const list = AGENTS.filter((a) => {
+    if (q && !`${a.name} ${a.role} ${a.ext}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  }).map((a) => {
+    const cs = CALLS.filter((c) => c.agent === a.name);
+    const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
+    return { a, cs, avg };
+  });
+  const sorted =
+    sort === "neg"
+      ? [...list].sort((x, y) => x.avg - y.avg)
+      : sort === "pos"
+      ? [...list].sort((x, y) => y.avg - x.avg)
+      : list;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {AGENTS.map((a) => {
-        const cs = CALLS.filter((c) => c.agent === a.name);
-        const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
-        const sl = sentLabel(avg);
-        return (
-          <div key={a.name} className="surface-card p-6">
-            <div className="flex items-start gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
-                {a.name.split(" ").map((p) => p[0]).join("")}
-              </div>
-              <div>
-                <div className="text-[15px] font-semibold">{a.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {a.role} · <span className="font-mono">{a.ext}</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 flex items-end justify-between">
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls</div>
-                <div className="font-mono text-2xl">{cs.length}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Avg sentiment</div>
-                <div className="mt-1 flex items-center justify-end gap-2">
-                  {cs.length > 0 && <SentimentDot s={avg} />}
-                  <span className={cn("text-sm font-medium", cs.length ? sl.cls : "text-muted-foreground")}>
-                    {cs.length ? sl.txt : "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
+    <div className="space-y-5">
+      <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="flex items-center gap-2 text-[12.5px]">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-pos" />
+          </span>
+          <span className="font-medium text-foreground">Synced from RingCentral</span>
+          <span className="text-muted-foreground">· {AGENTS.length} agents · {range}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search agents…"
+              className="h-9 w-[200px] rounded-lg border border-border bg-surface pl-9 pr-3 text-[13px] outline-none focus:border-primary/60"
+            />
           </div>
-        );
-      })}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="h-9 rounded-lg border border-border bg-surface px-3 text-[13px] outline-none focus:border-primary/60"
+          >
+            <option value="all">Sort: A–Z</option>
+            <option value="neg">Most negative first</option>
+            <option value="pos">Most positive first</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {sorted.map(({ a, cs, avg }) => {
+          const sl = sentLabel(avg);
+          return (
+            <button
+              key={a.name}
+              onClick={() => onOpen(a.name)}
+              className="surface-card group p-6 text-left transition hover:border-border-strong hover:shadow-[0_0_0_1px_var(--border-strong),0_8px_30px_-12px_oklch(0_0_0/0.4)]"
+            >
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-3 font-mono text-sm font-medium text-foreground">
+                  {a.name.split(" ").map((p) => p[0]).join("")}
+                </div>
+                <div>
+                  <div className="text-[15px] font-semibold">{a.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {a.role} · <span className="font-mono">{a.ext}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex items-end justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Calls</div>
+                  <div className="font-mono text-2xl">{cs.length}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Avg sentiment</div>
+                  <div className="mt-1 flex items-center justify-end gap-2">
+                    {cs.length > 0 && <SentimentDot s={avg} />}
+                    <span className={cn("text-sm font-medium", cs.length ? sl.cls : "text-muted-foreground")}>
+                      {cs.length ? sl.txt : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 text-[11px] text-primary opacity-0 transition group-hover:opacity-100">
+                View calls →
+              </div>
+            </button>
+          );
+        })}
+        {!sorted.length && (
+          <div className="surface-card col-span-full p-10 text-center text-sm text-muted-foreground">
+            No agents match.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Agent Detail ---------------- */
+function AgentDetail({
+  name,
+  range,
+  onBack,
+  onCall,
+}: {
+  name: string;
+  range: string;
+  onBack: () => void;
+  onCall: (c: Call) => void;
+}) {
+  const a = agentOf(name);
+  const cs = CALLS.filter((c) => c.agent === name);
+  const p = cs.filter((c) => c.sent > 0.1).length;
+  const n = cs.filter((c) => c.sent < -0.1).length;
+  const nu = cs.length - p - n;
+  const avg = cs.length ? cs.reduce((s, c) => s + c.sent, 0) / cs.length : 0;
+  const sl = sentLabel(avg);
+  const longest = cs.length ? Math.max(...cs.map((c) => c.dur)) : 0;
+
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        className="mb-5 inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+      >
+        <ArrowLeft className="h-3 w-3" /> Agent Scorecards
+      </button>
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-surface-3 font-mono text-base font-semibold text-foreground">
+            {name.split(" ").map((p) => p[0]).join("")}
+          </div>
+          <div>
+            <h1 className="font-display text-3xl tracking-tight">{name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {a?.role} · <span className="font-mono">{a?.ext}</span> · {range}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() =>
+            downloadCSV(`${name.replace(/\s+/g, "-").toLowerCase()}-calls.csv`, callsToRows(cs))
+          }
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs hover:bg-surface-2"
+        >
+          <Download className="h-3.5 w-3.5" /> Export calls
+        </button>
+      </div>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Total calls" value={cs.length} sub={range} />
+        <Kpi label="Positive" value={cs.length ? `${Math.round((p / cs.length) * 100)}%` : "—"} sub={`${p} calls`} tone="pos" />
+        <Kpi label="Negative" value={cs.length ? `${Math.round((n / cs.length) * 100)}%` : "—"} sub={`${n} calls`} tone="neg" accent={n > 0} />
+        <Kpi label="Longest call" value={longest ? mmss(longest) : "—"} sub="duration" />
+      </div>
+
+      <div className="surface-card mt-6 p-6">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Sentiment split</div>
+        <div className="mb-3 flex h-3 overflow-hidden rounded-full bg-surface-2">
+          {cs.length > 0 && (
+            <>
+              <div className="bg-pos" style={{ width: `${(p / cs.length) * 100}%` }} />
+              <div className="bg-neu" style={{ width: `${(nu / cs.length) * 100}%` }} />
+              <div className="bg-neg" style={{ width: `${(n / cs.length) * 100}%` }} />
+            </>
+          )}
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{p} positive · {nu} neutral · {n} negative</span>
+          <span className={sl.cls}>Avg: {sl.txt}</span>
+        </div>
+      </div>
+
+      <h3 className="mt-8 mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        All calls ({cs.length})
+      </h3>
+      <div className="grid gap-3">
+        {cs.length === 0 && (
+          <div className="surface-card p-10 text-center text-sm text-muted-foreground">
+            No calls in this window.
+          </div>
+        )}
+        {cs.map((c) => (
+          <Brief key={c.id} c={c} onClick={() => onCall(c)} />
+        ))}
+      </div>
     </div>
   );
 }
