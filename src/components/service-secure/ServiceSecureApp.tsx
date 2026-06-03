@@ -882,7 +882,7 @@ function AgentsView({
       ? [...list].sort((x, y) => y.cs.length - x.cs.length)
       : list;
 
-  const heatmapDays = volumeBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
+  const heatmapDays = dailyBuckets(rangeCalls, range, customStart, customEnd).map((b) => b.date);
   const heatmapRows = list.map((row) => ({
     name: row.a.name,
     counts: row.buckets.map((b) => b.count),
