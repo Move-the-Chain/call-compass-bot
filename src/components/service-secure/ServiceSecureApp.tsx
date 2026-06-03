@@ -310,7 +310,7 @@ export default function ServiceSecureApp() {
               <div className="min-w-0">
                 <div className="truncate text-[12.5px] font-medium">{meQuery.data.profile.name || meQuery.data.profile.email}</div>
                 <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  {meQuery.data.roles.map((r) => ROLE_LABEL[r as Role]).join(" · ") || "No role"}
+                  {meQuery.data.profile.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
                 </div>
               </div>
               <button
