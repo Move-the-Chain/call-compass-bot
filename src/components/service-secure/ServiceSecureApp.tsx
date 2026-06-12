@@ -104,7 +104,9 @@ export function roleLabel(r: string): string {
 }
 // Back-compat exports (some call sites still reference these)
 export const ROLES: Role[] = TITLE_SUGGESTIONS;
-export const ROLE_LABEL = new Proxy({} as Record<string, string>, { get: (_t, k: string) => roleLabel(k) });
+export const ROLE_LABEL = new Proxy({} as Record<string, string>, {
+  get: (_t, k) => (typeof k === "string" ? roleLabel(k) : undefined),
+});
 export type Person = { id: string; name: string; email: string; phone: string; role: Role };
 export type Priority = "Low" | "Medium" | "High" | "Urgent";
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Urgent"];
