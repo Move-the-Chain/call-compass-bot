@@ -15,7 +15,7 @@ import {
   upsertAlertRule as upsertAlertRuleFn,
   setAlertRuleEnabled as setAlertRuleEnabledFn,
   deleteAlertRule as deleteAlertRuleFn,
-} from "@/lib/alert-rules.functions";
+} from "@/lib/alertRules.functions";
 import {
   AlertTriangle,
   ArrowLeft,
