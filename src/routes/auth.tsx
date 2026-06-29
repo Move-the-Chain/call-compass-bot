@@ -78,7 +78,7 @@ function AuthPage() {
 
   const continueForNow = () => {
     window.localStorage.setItem(TEMP_ACCESS_KEY, "true");
-    navigate({ to: "/" });
+    window.location.assign("/");
   };
 
   return (
