@@ -4,6 +4,8 @@ import { Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
+const TEMP_ACCESS_KEY = "service-secure-temp-access";
+
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — Service Secure" }] }),
   component: AuthPage,
@@ -74,6 +76,11 @@ function AuthPage() {
         : "Enter your email and we'll send you a reset link.";
   const cta = loading ? "Please wait…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link";
 
+  const continueForNow = () => {
+    window.localStorage.setItem(TEMP_ACCESS_KEY, "true");
+    navigate({ to: "/" });
+  };
+
   return (
     <div className="grid min-h-screen place-items-center bg-background px-4 py-10 text-foreground">
       <div className="w-full max-w-md">
@@ -127,6 +134,16 @@ function AuthPage() {
             >
               {cta}
             </button>
+
+            {mode === "signin" && (
+              <button
+                type="button"
+                onClick={continueForNow}
+                className="w-full rounded-lg border border-border bg-surface py-2.5 text-[13.5px] font-medium text-foreground transition hover:bg-surface-2"
+              >
+                Continue for now
+              </button>
+            )}
           </form>
 
           <div className="mt-5 space-y-2 text-center text-xs text-muted-foreground">

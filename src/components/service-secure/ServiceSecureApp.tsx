@@ -69,6 +69,8 @@ import {
   TierBadge,
 } from "./primitives";
 
+const TEMP_ACCESS_KEY = "service-secure-temp-access";
+
 type Screen =
   | "summary"
   | "explorer"
@@ -170,16 +172,21 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
+  const [tempAccess, setTempAccess] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(TEMP_ACCESS_KEY) === "true",
+  );
   const navigate = useNavigate();
   const listPeople = useServerFn(listPeopleFn);
   const getMyAccess = useServerFn(getMyAccessFn);
   const peopleQuery = useQuery({
     queryKey: ["access", "people"],
     queryFn: () => listPeople(),
+    enabled: !tempAccess,
   });
   const meQuery = useQuery({
     queryKey: ["access", "me"],
     queryFn: () => getMyAccess(),
+    enabled: !tempAccess,
   });
   const people: Person[] = useMemo(
     () =>
@@ -316,17 +323,21 @@ export default function ServiceSecureApp() {
               <div>{unmatched} unmatched · 8 flagged</div>
             </div>
           </div>
-          {meQuery.data?.profile && (
+          {(meQuery.data?.profile || tempAccess) && (
             <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2/60 p-3">
               <div className="min-w-0">
-                <div className="truncate text-[12.5px] font-medium">{meQuery.data.profile.name || meQuery.data.profile.email}</div>
+                <div className="truncate text-[12.5px] font-medium">
+                  {tempAccess ? "Temporary access" : meQuery.data?.profile?.name || meQuery.data?.profile?.email}
+                </div>
                 <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  {meQuery.data.profile.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
+                  {tempAccess ? "Preview" : meQuery.data?.profile?.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
                 </div>
               </div>
               <button
                 onClick={async () => {
-                  await supabase.auth.signOut();
+                  window.localStorage.removeItem(TEMP_ACCESS_KEY);
+                  setTempAccess(false);
+                  if (!tempAccess) await supabase.auth.signOut();
                   navigate({ to: "/auth" });
                 }}
                 title="Sign out"
