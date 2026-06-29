@@ -69,6 +69,8 @@ import {
   TierBadge,
 } from "./primitives";
 
+const TEMP_ACCESS_KEY = "service-secure-temp-access";
+
 type Screen =
   | "summary"
   | "explorer"
@@ -170,16 +172,21 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
+  const [tempAccess, setTempAccess] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(TEMP_ACCESS_KEY) === "true",
+  );
   const navigate = useNavigate();
   const listPeople = useServerFn(listPeopleFn);
   const getMyAccess = useServerFn(getMyAccessFn);
   const peopleQuery = useQuery({
     queryKey: ["access", "people"],
     queryFn: () => listPeople(),
+    enabled: !tempAccess,
   });
   const meQuery = useQuery({
     queryKey: ["access", "me"],
     queryFn: () => getMyAccess(),
+    enabled: !tempAccess,
   });
   const people: Person[] = useMemo(
     () =>
@@ -316,17 +323,21 @@ export default function ServiceSecureApp() {
               <div>{unmatched} unmatched · 8 flagged</div>
             </div>
           </div>
-          {meQuery.data?.profile && (
+          {(meQuery.data?.profile || tempAccess) && (
             <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2/60 p-3">
               <div className="min-w-0">
-                <div className="truncate text-[12.5px] font-medium">{meQuery.data.profile.name || meQuery.data.profile.email}</div>
+                <div className="truncate text-[12.5px] font-medium">
+                  {tempAccess ? "Temporary access" : meQuery.data?.profile?.name || meQuery.data?.profile?.email}
+                </div>
                 <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  {meQuery.data.profile.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
+                  {tempAccess ? "Preview" : meQuery.data?.profile?.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
                 </div>
               </div>
               <button
                 onClick={async () => {
-                  await supabase.auth.signOut();
+                  window.localStorage.removeItem(TEMP_ACCESS_KEY);
+                  setTempAccess(false);
+                  if (!tempAccess) await supabase.auth.signOut();
                   navigate({ to: "/auth" });
                 }}
                 title="Sign out"
@@ -443,7 +454,7 @@ export default function ServiceSecureApp() {
             onAssignAccount={(name) => assignAccount(sel.id, name)}
           />
         )}
-        {screen === "admin" && <AccessManagementView people={people} />}
+        {screen === "admin" && <AccessManagementView people={people} tempAccess={tempAccess} />}
         {screen === "integrations" && <IntegrationsView />}
         {screen === "notifications" && (
           <NotificationsView
@@ -451,6 +462,7 @@ export default function ServiceSecureApp() {
             channels={channels}
             setChannels={setChannels}
             onGoAdmin={() => setScreen("admin")}
+            tempAccess={tempAccess}
           />
         )}
       </main>
@@ -1946,7 +1958,7 @@ function IntegrationsView() {
 /* ---------------- Access Management ---------------- */
 type PersonDraft = { id?: string; name: string; email: string; phone: string; role: Role; password?: string };
 
-function AccessManagementView({ people }: { people: Person[] }) {
+function AccessManagementView({ people, tempAccess }: { people: Person[]; tempAccess: boolean }) {
   const [editing, setEditing] = useState<PersonDraft | null>(null);
   const qc = useQueryClient();
   const createPerson = useServerFn(createPersonFn);
@@ -1982,10 +1994,13 @@ function AccessManagementView({ people }: { people: Person[] }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Head of Sales, etc.) is how notifications and routing decide who to ping.
+          {tempAccess
+            ? "Temporary access is active. Sign in later to manage real users."
+            : "Everyone with an account here can sign in and manage the platform. The title (COO, Manager, Head of Sales, etc.) is how notifications and routing decide who to ping."}
         </p>
         <button
           onClick={() => setEditing(blank)}
+          disabled={tempAccess}
           className="inline-flex h-10 items-center gap-2 rounded-lg bg-[image:var(--gradient-brand)] px-3.5 text-[12.5px] font-medium text-primary-foreground transition hover:brightness-110"
         >
           <Plus className="h-4 w-4" /> Add user
@@ -2099,11 +2114,13 @@ function NotificationsView({
   channels,
   setChannels,
   onGoAdmin,
+  tempAccess,
 }: {
   people: Person[];
   channels: { slack: boolean; email: boolean; sms: boolean };
   setChannels: React.Dispatch<React.SetStateAction<{ slack: boolean; email: boolean; sms: boolean }>>;
   onGoAdmin: () => void;
+  tempAccess: boolean;
 }) {
   const [editing, setEditing] = useState<{ rule: AlertRule; isNew: boolean } | null>(null);
   const smsReady = people.some((p) => p.phone.trim().length > 0);
@@ -2118,6 +2135,7 @@ function NotificationsView({
   const rulesQuery = useQuery({
     queryKey: ["alert-rules"],
     queryFn: () => listRules(),
+    enabled: !tempAccess,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
@@ -2164,7 +2182,11 @@ function NotificationsView({
 
   return (
     <div className="space-y-8">
-      <p className="-mt-2 text-sm text-muted-foreground">Where alerts go, and what triggers them. Recipients come from <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>.</p>
+      <p className="-mt-2 text-sm text-muted-foreground">
+        {tempAccess ? "Temporary access is active. Sign in later to manage real alert rules." : "Where alerts go, and what triggers them. Recipients come from "}
+        {!tempAccess && <button onClick={onGoAdmin} className="underline decoration-dotted underline-offset-4 hover:text-foreground">Access Management</button>}
+        {!tempAccess && "."}
+      </p>
 
       <section>
         <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Channels</div>
@@ -2187,6 +2209,7 @@ function NotificationsView({
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Alert rules</div>
           <button
+            disabled={tempAccess}
             onClick={() =>
               setEditing({
                 isNew: true,
