@@ -337,7 +337,7 @@ export default function ServiceSecureApp() {
 
       {/* Main */}
       <main className="min-w-0 flex-1 px-6 py-6 lg:px-10 lg:py-8">
-        {screen !== "detail" && screen !== "accountDetail" && screen !== "agentDetail" && (
+        {screen !== "detail" && screen !== "accountDetail" && screen !== "agentDetail" && screen !== "summary" && (
           <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
