@@ -371,20 +371,15 @@ export default function ServiceSecureApp() {
         )}
 
         {screen === "summary" && (
-          <SummaryView
+          <SummaryWorkspace
             rangeCalls={rangeCalls}
             total={total}
             pos={pos}
             neg={neg}
             unmatched={unmatched}
-            range={range}
-            customStart={customStart}
-            customEnd={customEnd}
             todosNeg={todosNeg}
-            todosPos={todosPos}
             resolved={resolved}
-            followUps={followUps}
-            onOpen={open}
+            onViewAll={() => setScreen("explorer")}
           />
         )}
         {screen === "explorer" && (
