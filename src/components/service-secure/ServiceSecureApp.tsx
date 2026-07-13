@@ -24,7 +24,7 @@ import {
   Download,
   Headphones,
   LayoutGrid,
-  LogOut,
+  
   Mail,
   MessageSquare,
   Pause,
