@@ -69,7 +69,7 @@ import {
   TierBadge,
 } from "./primitives";
 
-const TEMP_ACCESS_KEY = "service-secure-temp-access";
+
 
 type Screen =
   | "summary"
@@ -172,10 +172,7 @@ export default function ServiceSecureApp() {
   const [resolved, setResolved] = useState<Set<number>>(new Set());
   const [followUps, setFollowUps] = useState<Record<number, FollowUp>>({});
   const [acctOverrides, setAcctOverrides] = useState<Record<number, string>>({});
-  const [tempAccess, setTempAccess] = useState(
-    () => typeof window !== "undefined" && window.localStorage.getItem(TEMP_ACCESS_KEY) === "true",
-  );
-  const navigate = useNavigate();
+  const tempAccess = true;
   const listPeople = useServerFn(listPeopleFn);
   const getMyAccess = useServerFn(getMyAccessFn);
   const peopleQuery = useQuery({
@@ -188,6 +185,7 @@ export default function ServiceSecureApp() {
     queryFn: () => getMyAccess(),
     enabled: !tempAccess,
   });
+
   const people: Person[] = useMemo(
     () =>
       (peopleQuery.data ?? []).map((p) => ({
@@ -327,24 +325,12 @@ export default function ServiceSecureApp() {
             <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2/60 p-3">
               <div className="min-w-0">
                 <div className="truncate text-[12.5px] font-medium">
-                  {tempAccess ? "Temporary access" : meQuery.data?.profile?.name || meQuery.data?.profile?.email}
+                  {tempAccess ? "Preview mode" : meQuery.data?.profile?.name || meQuery.data?.profile?.email}
                 </div>
                 <div className="truncate text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  {tempAccess ? "Preview" : meQuery.data?.profile?.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
+                  {tempAccess ? "Design" : meQuery.data?.profile?.title ? ROLE_LABEL[meQuery.data.profile.title as Role] : "Admin"}
                 </div>
               </div>
-              <button
-                onClick={async () => {
-                  window.localStorage.removeItem(TEMP_ACCESS_KEY);
-                  setTempAccess(false);
-                  if (!tempAccess) await supabase.auth.signOut();
-                  navigate({ to: "/auth" });
-                }}
-                title="Sign out"
-                className="ml-2 rounded-md p-1.5 text-muted-foreground hover:bg-surface hover:text-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
             </div>
           )}
         </div>
